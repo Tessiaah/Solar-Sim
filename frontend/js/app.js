@@ -19,6 +19,12 @@ window.SolarSim.screens.initSettingsScreen({
     store: settingsStore,
 });
 
+window.SolarSim.screens.initSimulationScreen({
+    root: document.querySelector('[data-screen="simulation"]'),
+    router,
+    store: settingsStore,
+});
+
 window.SolarSim.settings.applyRuntimeEffects({
     schema: window.SolarSim.settings.schema,
     store: settingsStore,

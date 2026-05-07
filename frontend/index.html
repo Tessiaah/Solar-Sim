@@ -9,12 +9,19 @@
         <link rel="stylesheet" href="./css/layout.css">
         <link rel="stylesheet" href="./css/components/welcome.css">
         <link rel="stylesheet" href="./css/components/settings.css">
+        <link rel="stylesheet" href="./css/components/simulation.css">
+        <script defer src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+        <script defer src="./js/api/backend-api.js"></script>
         <script defer src="./js/settings/settings-schema.js"></script>
         <script defer src="./js/settings/settings-store.js"></script>
         <script defer src="./js/settings/settings-effects.js"></script>
         <script defer src="./js/ui/screen-router.js"></script>
+        <script defer src="./js/rendering/materials.js"></script>
+        <script defer src="./js/rendering/space-backdrop.js"></script>
+        <script defer src="./js/rendering/simulation-renderer.js"></script>
         <script defer src="./js/screens/welcome.js"></script>
         <script defer src="./js/screens/settings.js"></script>
+        <script defer src="./js/screens/simulation.js"></script>
         <script defer src="./js/app.js"></script>
     </head>
     <body>
@@ -98,6 +105,21 @@
                     <nav id="settings-category-nav" class="settings-category-nav" aria-label="Settings categories"></nav>
                     <form id="settings-form" class="settings-form"></form>
                 </section>
+            </main>
+
+            <main id="simulation-screen" class="screen simulation-screen" data-screen="simulation">
+                <div id="simulation-viewport" class="simulation-viewport" aria-label="Simulation viewport"></div>
+
+                <header class="simulation-toolbar">
+                    <button type="button" data-route="welcome">
+                        <span class="app-icon app-icon-arrow-left" aria-hidden="true"></span>
+                        <span>Back</span>
+                    </button>
+
+                    <div class="simulation-readout" aria-live="polite">
+                        <span data-simulation-time>0.00 days</span>
+                    </div>
+                </header>
             </main>
         </div>
     </body>

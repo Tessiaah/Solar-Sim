@@ -2,7 +2,7 @@ from pathlib import Path
 
 import webview
 
-from src.app.bridge import HostWindowApi
+from src.app.api import AppApi
 
 
 APP_TITLE = "Solar Sim"
@@ -21,7 +21,7 @@ def launch_app() -> None:
     if not entrypoint.exists():
         raise FileNotFoundError(f"Frontend entrypoint not found: {entrypoint}")
 
-    api = HostWindowApi()
+    api = AppApi()
     window = webview.create_window(
         APP_TITLE,
         entrypoint.as_uri(),

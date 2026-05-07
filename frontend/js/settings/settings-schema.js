@@ -56,9 +56,9 @@ window.SolarSim.settings.schema = {
                     { value: "high", label: "High" },
                 ],
                 mapsTo: {
-                    low: { sphereGeometryDetail: 16, textureQuality: "low", trailQuality: "low" },
-                    medium: { sphereGeometryDetail: 32, textureQuality: "medium", trailQuality: "medium" },
-                    high: { sphereGeometryDetail: 64, textureQuality: "high", trailQuality: "high" },
+                    low: { sphereGeometryDetail: 16, textureQuality: "low", trailQuality: "low", simulationStepsPerFrame: 2 },
+                    medium: { sphereGeometryDetail: 32, textureQuality: "medium", trailQuality: "medium", simulationStepsPerFrame: 4 },
+                    high: { sphereGeometryDetail: 64, textureQuality: "high", trailQuality: "high", simulationStepsPerFrame: 6 },
                 },
             },
             {

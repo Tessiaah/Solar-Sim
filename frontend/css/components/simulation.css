@@ -1,0 +1,61 @@
+.simulation-screen {
+    background: #05070b;
+    overflow: hidden;
+}
+
+.simulation-viewport {
+    position: absolute;
+    inset: 0;
+}
+
+.simulation-viewport canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.simulation-toolbar {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    left: 20px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    pointer-events: none;
+}
+
+.simulation-toolbar button,
+.simulation-readout {
+    pointer-events: auto;
+}
+
+.simulation-toolbar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 13px;
+    border: 1px solid rgb(255 255 255 / 16%);
+    border-radius: var(--radius-small);
+    background: rgb(8 11 17 / 78%);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 800;
+}
+
+.simulation-readout {
+    min-width: 116px;
+    padding: 10px 12px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: var(--radius-small);
+    background: rgb(8 11 17 / 74%);
+    color: var(--color-text);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.9rem;
+    font-weight: 900;
+    text-align: right;
+    box-shadow: var(--shadow-panel);
+}

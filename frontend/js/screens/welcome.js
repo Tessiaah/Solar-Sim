@@ -40,8 +40,8 @@ window.SolarSim.screens.initWelcomeScreen = function initWelcomeScreen({ root, r
 };
 
 function quitApplication() {
-    if (window.pywebview?.api?.quit_app) {
-        const request = window.pywebview.api.quit_app();
+    if (window.SolarSim?.backend?.isAvailable()) {
+        const request = window.SolarSim.backend.host.quit();
 
         if (request && typeof request.catch === "function") {
             request.catch((error) => {

@@ -1,3 +1,5 @@
+
+
 window.SolarSim = window.SolarSim || {};
 window.SolarSim.settings = window.SolarSim.settings || {};
 
@@ -202,7 +204,7 @@ function createHostWindowAdapter() {
     function apply(graphics) {
         const [width, height] = graphics.resolution.split("x").map(Number);
 
-        if (!isPyWebViewReady || !window.pywebview?.api?.apply_window_settings) {
+        if (!isPyWebViewReady || !window.SolarSim?.backend?.isAvailable()) {
             if (window.pywebview) {
                 pendingGraphics = graphics;
                 return true;
@@ -211,7 +213,7 @@ function createHostWindowAdapter() {
             return false;
         }
 
-        const request = window.pywebview.api.apply_window_settings({
+        const request = window.SolarSim.backend.host.applyWindowSettings({
             displayMode: graphics.displayMode,
             width,
             height,

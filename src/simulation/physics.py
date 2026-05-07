@@ -1,6 +1,6 @@
 import numpy as np
 from src.data.constants import G
-from body import SimBody
+from src.simulation.body import SimBody
 
 
 #we use the n-body equation for acceleration (check my documentation to see which one)
