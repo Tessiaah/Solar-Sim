@@ -1,0 +1,108 @@
+.app-shell {
+    min-height: 100vh;
+}
+
+.screen {
+    position: relative;
+    min-height: 100vh;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.screen:not(.screen-active) {
+    display: none;
+}
+
+.screen-active {
+    display: block;
+}
+
+.app-icon {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+}
+
+.app-icon::before,
+.app-icon::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    content: "";
+    transform-origin: center;
+}
+
+.app-icon-arrow-right::before,
+.app-icon-arrow-left::before {
+    width: 0.72rem;
+    height: 0.12rem;
+    border-radius: 999px;
+    background: currentColor;
+    transform: translate(-50%, -50%);
+}
+
+.app-icon-arrow-right::after,
+.app-icon-arrow-left::after {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-top: 0.12rem solid currentColor;
+    border-right: 0.12rem solid currentColor;
+}
+
+.app-icon-arrow-right::after {
+    transform: translate(-38%, -50%) rotate(45deg);
+}
+
+.app-icon-arrow-left::after {
+    transform: translate(-62%, -50%) rotate(225deg);
+}
+
+.performance-overlay {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+    display: none;
+    min-width: 150px;
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-small);
+    background: rgb(7 9 13 / 82%);
+    box-shadow: var(--shadow-panel);
+    color: var(--color-text);
+    backdrop-filter: blur(16px);
+}
+
+.performance-overlay.is-visible {
+    display: grid;
+}
+
+.performance-overlay div {
+    display: none;
+    grid-template-columns: 1fr auto;
+    gap: 18px;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--color-line);
+}
+
+.performance-overlay div:last-child {
+    border-bottom: 0;
+}
+
+.performance-overlay div.is-visible {
+    display: grid;
+}
+
+.performance-overlay span,
+.performance-overlay strong {
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 900;
+}
+
+.performance-overlay span {
+    color: var(--color-muted);
+    text-transform: uppercase;
+}

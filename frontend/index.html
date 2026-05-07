@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Solar Sim</title>
+        <link rel="stylesheet" href="./css/reset.css">
+        <link rel="stylesheet" href="./css/theme.css">
+        <link rel="stylesheet" href="./css/layout.css">
+        <link rel="stylesheet" href="./css/components/welcome.css">
+        <link rel="stylesheet" href="./css/components/settings.css">
+        <script defer src="./js/settings/settings-schema.js"></script>
+        <script defer src="./js/settings/settings-store.js"></script>
+        <script defer src="./js/settings/settings-effects.js"></script>
+        <script defer src="./js/ui/screen-router.js"></script>
+        <script defer src="./js/screens/welcome.js"></script>
+        <script defer src="./js/screens/settings.js"></script>
+        <script defer src="./js/app.js"></script>
+    </head>
+    <body>
+        <div id="app" class="app-shell">
+            <aside id="performance-overlay" class="performance-overlay" aria-label="Performance overlay">
+                <div data-overlay-row="fps">
+                    <span>FPS</span>
+                    <strong data-overlay-value="fps">--</strong>
+                </div>
+                <div data-overlay-row="frameTime">
+                    <span>Frame</span>
+                    <strong data-overlay-value="frameTime">-- ms</strong>
+                </div>
+                <div data-overlay-row="simulationStep">
+                    <span>Step</span>
+                    <strong data-overlay-value="simulationStep">Backend</strong>
+                </div>
+            </aside>
+
+            <main id="welcome-screen" class="screen screen-active" data-screen="welcome">
+                <canvas id="welcome-orbits" class="welcome-orbits" aria-hidden="true"></canvas>
+
+                <section class="welcome-panel" aria-labelledby="welcome-title">
+                    <div class="brand-lockup">
+                        <span class="brand-mark" aria-hidden="true"></span>
+                        <span class="brand-name">Solar Sim</span>
+                    </div>
+
+                    <div class="welcome-copy">
+                        <p class="welcome-kicker">N-body orbital sandbox</p>
+                        <h1 id="welcome-title">Solar Sim</h1>
+                        <p class="welcome-summary">
+                            Build, inspect, and run gravitational systems from a clean simulation workspace.
+                        </p>
+                    </div>
+
+                    <nav class="welcome-actions" aria-label="Main navigation">
+                        <button class="primary-action" type="button" data-route="simulation">
+                            <span>Start Simulation</span>
+                            <span class="app-icon app-icon-arrow-right action-icon" aria-hidden="true"></span>
+                        </button>
+
+                        <div class="secondary-actions">
+                            <button type="button" data-route="scenarios">Scenarios</button>
+                            <button type="button" data-route="settings">Settings</button>
+                            <button type="button" data-route="about">About</button>
+                            <button type="button" class="quit-action" data-app-command="quit">Quit</button>
+                        </div>
+                    </nav>
+                </section>
+
+                <aside class="welcome-status" aria-label="Application status">
+                    <div>
+                        <span class="status-label">Backend</span>
+                        <span class="status-value">Local Python</span>
+                    </div>
+                    <div>
+                        <span class="status-label">Renderer</span>
+                        <span class="status-value">WebGL / Three.js</span>
+                    </div>
+                    <div>
+                        <span class="status-label">Mode</span>
+                        <span class="status-value" data-status="integrator">Velocity Verlet</span>
+                    </div>
+                </aside>
+            </main>
+
+            <main id="settings-screen" class="screen settings-screen" data-screen="settings">
+                <header class="settings-header">
+                    <div>
+                        <p class="settings-kicker">Runtime configuration</p>
+                        <h1>Settings</h1>
+                    </div>
+                    <button class="settings-back-button" type="button" data-route="welcome">
+                        <span class="app-icon app-icon-arrow-left" aria-hidden="true"></span>
+                        <span>Back</span>
+                    </button>
+                </header>
+
+                <section class="settings-shell" aria-label="Application settings">
+                    <nav id="settings-category-nav" class="settings-category-nav" aria-label="Settings categories"></nav>
+                    <form id="settings-form" class="settings-form"></form>
+                </section>
+            </main>
+        </div>
+    </body>
+</html>

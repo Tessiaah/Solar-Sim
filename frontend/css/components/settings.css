@@ -1,0 +1,345 @@
+.settings-screen {
+    height: 100vh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 38px var(--space-page);
+    scrollbar-color: var(--color-line-strong) rgb(7 9 13 / 80%);
+    scrollbar-width: thin;
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 4%), transparent 34%),
+        radial-gradient(circle at 78% 18%, rgb(110 231 216 / 10%), transparent 26%),
+        radial-gradient(circle at 18% 82%, rgb(244 201 93 / 8%), transparent 24%),
+        var(--color-bg);
+}
+
+.settings-screen::-webkit-scrollbar {
+    width: 10px;
+}
+
+.settings-screen::-webkit-scrollbar-track {
+    background: rgb(7 9 13 / 80%);
+}
+
+.settings-screen::-webkit-scrollbar-thumb {
+    border: 2px solid rgb(7 9 13 / 80%);
+    border-radius: 999px;
+    background: var(--color-line-strong);
+}
+
+.settings-screen::before {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    content: "";
+    background-image:
+        linear-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px),
+        linear-gradient(90deg, rgb(255 255 255 / 4%) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(180deg, rgb(0 0 0 / 70%), transparent 86%);
+}
+
+.settings-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 0 auto 28px;
+    width: min(1500px, 100%);
+}
+
+.settings-kicker {
+    margin: 0 0 8px;
+    color: var(--color-accent);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.82rem;
+    font-weight: 900;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.settings-header h1 {
+    margin: 0;
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: clamp(2.8rem, 5vw, 5.2rem);
+    font-weight: 900;
+    line-height: 0.9;
+    letter-spacing: 0;
+}
+
+.settings-back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-small);
+    background: rgb(16 21 29 / 82%);
+    color: var(--color-text);
+    cursor: pointer;
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-weight: 900;
+}
+
+.settings-back-button .app-icon {
+    color: var(--color-accent);
+}
+
+.settings-shell {
+    display: grid;
+    grid-template-columns: 270px minmax(0, 1fr);
+    gap: 18px;
+    width: min(1500px, 100%);
+    margin: 0 auto;
+}
+
+.settings-category-nav,
+.settings-form {
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+    background: rgb(16 21 29 / 78%);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(18px);
+}
+
+.settings-category-nav {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    padding: 10px;
+}
+
+.settings-category-button {
+    display: grid;
+    gap: 4px;
+    min-height: 70px;
+    padding: 13px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-small);
+    background: transparent;
+    color: var(--color-muted);
+    cursor: pointer;
+    text-align: left;
+}
+
+.settings-category-button span:first-child {
+    color: var(--color-text);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.settings-category-button span:last-child {
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.settings-category-button.is-active,
+.settings-category-button:hover {
+    border-color: rgb(110 231 216 / 42%);
+    background: rgb(110 231 216 / 10%);
+    color: var(--color-soft);
+}
+
+.settings-form {
+    min-height: 640px;
+    padding: 28px;
+}
+
+.settings-section {
+    display: none;
+}
+
+.settings-section.is-active {
+    display: grid;
+    gap: 18px;
+}
+
+.settings-section-header {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.settings-section-header h2 {
+    margin: 0;
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 2rem;
+    font-weight: 900;
+}
+
+.settings-section-header p {
+    max-width: 760px;
+    margin: 0;
+    color: var(--color-muted);
+    line-height: 1.55;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.setting-control {
+    display: grid;
+    gap: 12px;
+    min-height: 122px;
+    margin: 0;
+    padding: 16px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-small);
+    background: rgb(7 9 13 / 42%);
+}
+
+.setting-control[data-readonly="true"] {
+    border-style: dashed;
+}
+
+.setting-label-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 0;
+}
+
+.setting-title {
+    color: var(--color-text);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.setting-owner {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    color: var(--color-muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.setting-description {
+    margin: -4px 0 0;
+    color: var(--color-muted);
+    font-size: 0.86rem;
+    line-height: 1.42;
+}
+
+.segmented-control {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.segmented-control button,
+.toggle-row button {
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-small);
+    background: rgb(16 21 29 / 82%);
+    color: var(--color-soft);
+    cursor: pointer;
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-weight: 800;
+}
+
+.segmented-control button.is-selected,
+.toggle-row button[aria-pressed="true"] {
+    border-color: var(--color-accent);
+    background: rgb(110 231 216 / 14%);
+    color: var(--color-text);
+}
+
+.toggle-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.range-row,
+.number-row {
+    display: grid;
+    grid-template-columns: 1fr 92px;
+    gap: 12px;
+    align-items: center;
+}
+
+.range-row input[type="range"] {
+    width: 100%;
+    accent-color: var(--color-accent);
+}
+
+.range-value,
+.number-row input,
+.readonly-value {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-small);
+    background: rgb(7 9 13 / 78%);
+    color: var(--color-text);
+    font: inherit;
+    text-align: right;
+}
+
+.readonly-value {
+    text-align: left;
+}
+
+.settings-warning {
+    display: none;
+    padding: 13px 14px;
+    border: 1px solid rgb(255 107 107 / 56%);
+    border-radius: var(--radius-small);
+    background: rgb(255 107 107 / 10%);
+    color: #ffdede;
+    font-weight: 800;
+}
+
+.settings-warning.is-visible {
+    display: block;
+}
+
+@media (max-width: 980px) {
+    .settings-header,
+    .settings-shell {
+        width: 100%;
+    }
+
+    .settings-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-category-nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 560px) {
+    .settings-screen {
+        padding: 22px 16px;
+    }
+
+    .settings-header {
+        display: grid;
+    }
+
+    .settings-category-nav {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-form {
+        padding: 16px;
+    }
+}

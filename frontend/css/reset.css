@@ -1,0 +1,35 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    color-scheme: dark;
+    font-family:
+        Bahnschrift, "DIN Alternate", "Agency FB", "Segoe UI", ui-sans-serif,
+        system-ui, -apple-system, BlinkMacSystemFont,
+        sans-serif;
+    text-rendering: geometricPrecision;
+}
+
+body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+button {
+    border: 0;
+}
+
+canvas {
+    display: block;
+}
