@@ -15,7 +15,9 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         antialias: store?.getState().graphics.antiAliasing ?? true,
     });
     const scale = createDisplayScale();
+    const clock = new THREE.Clock();
     const bodyMetadata = new Map();
+    const backdrop = setupScene(scene, camera);
 
     let animationFrame = null;
     let running = false;
@@ -23,7 +25,6 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     let hasSnapshot = false;
     let currentGeometryDetail = 32;
 
-    setupScene(scene, camera);
     container.appendChild(renderer.domElement);
 
     function start() {
@@ -102,6 +103,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         syncBodyMeshes(snapshot.bodies);
         updateBodyPositions(snapshot.bodies);
         updateReadouts(snapshot);
+        backdrop.update(clock.getElapsedTime());
         renderer.render(scene, camera);
         hasSnapshot = true;
     }
@@ -254,13 +256,19 @@ function setupScene(scene, camera) {
     sunLight.position.set(0, 0, 0);
 
     scene.background = new THREE.Color("#02040a");
-    window.SolarSim.rendering.addSpaceBackdrop(scene);
+    const backdrop = window.SolarSim.rendering.addSpaceBackdrop(scene);
     scene.add(sunLight);
-    scene.add(new THREE.AmbientLight(0x7a8797, 0.34));
+    scene.add(createGlobalFillLight());
+
+    return backdrop;
+}
+
+function createGlobalFillLight() {
+    return new THREE.AmbientLight(0xd8e2f0, 0.82);
 }
 
 function createBodyMesh(body, materialFactory, scale, geometryDetail) {
-    const radius = Math.max(scale.minRadius, body.radiusM * scale.radius);
+    const radius = scale.radiusForBody(body);
     const geometry = createSphereGeometry(radius, geometryDetail);
     const material = materialFactory.createMaterial(body);
     const mesh = new THREE.Mesh(geometry, material);
@@ -273,10 +281,20 @@ function createSphereGeometry(radius, detail) {
 }
 
 function createDisplayScale() {
+    const sunBodyId = "sun";
+    const radiusScaleByBodyId = {
+        [sunBodyId]: 1 / 25_000_000,
+    };
+    const defaultRadiusScale = 1 / 2_250_000;
+    const minRadius = 1.2;
+
     return {
         position: 1 / 1_500_000_000,
-        radius: 1 / 25_000_000,
-        minRadius: 1.2,
+        minRadius,
+        radiusForBody(body) {
+            const radiusScale = radiusScaleByBodyId[body.id] ?? defaultRadiusScale;
+            return Math.max(minRadius, body.radiusM * radiusScale);
+        },
     };
 }
 

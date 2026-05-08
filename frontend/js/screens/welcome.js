@@ -193,14 +193,14 @@ function drawOrbits(context, centerX, centerY, width, elapsed, state) {
     for (let index = 0; index < orbitCount; index += 1) {
         const radius = baseRadius + index * 58;
         const tilt = 0.24 + index * 0.055;
-        const alpha = 0.18 - index * 0.012;
+        const alpha = 0.34 - index * 0.018;
 
         context.save();
         context.translate(centerX, centerY);
         context.rotate(-tilt);
         context.scale(1, 0.46);
         context.beginPath();
-        context.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        context.strokeStyle = `rgba(205, 212, 224, ${alpha})`;
         context.lineWidth = 1;
         context.arc(0, 0, radius, 0, TWO_PI);
         context.stroke();
