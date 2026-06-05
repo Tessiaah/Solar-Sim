@@ -715,6 +715,12 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         });
     }
 
+    function refreshBodyLabelTextures() {
+        bodyLabels.forEach((label, bodyId) => {
+            updateBodyLabelTexture(label, getBodyMetadata(bodyId));
+        });
+    }
+
     function resize() {
         const width = container.clientWidth || window.innerWidth;
         const height = container.clientHeight || window.innerHeight;
@@ -789,6 +795,9 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         if (lastSnapshot) {
             updateReadouts(lastSnapshot);
         }
+
+        refreshBodyLabelTextures();
+        updateBodyLabels();
     }
 
     window.addEventListener("resize", resize);
@@ -1057,9 +1066,14 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
 
     function ensurePerspectiveFlyCamera() {
         if (camera.isOrthographicCamera) {
+            const flyTarget = getCameraViewTarget().clone();
+            const flyPosition = camera.position.clone();
+
             setCameraProjection("perspective");
+            camera.position.copy(flyPosition);
             camera.up.set(0, 1, 0);
-            camera.updateMatrixWorld();
+            nudgeVerticalFlyCameraPose(camera, flyTarget);
+            camera.lookAt(flyTarget);
             cameraController.setCamera(camera);
         }
     }
@@ -1425,6 +1439,24 @@ function copyCameraPose(sourceCamera, targetCamera) {
     targetCamera.quaternion.copy(sourceCamera.quaternion);
     targetCamera.up.copy(sourceCamera.up);
     targetCamera.updateMatrixWorld();
+}
+
+function nudgeVerticalFlyCameraPose(camera, target) {
+    const offset = camera.position.clone().sub(target);
+
+    if (offset.lengthSq() === 0) {
+        camera.position.copy(target).add(new THREE.Vector3(0.35, 0.25, 1).normalize().multiplyScalar(220));
+        return;
+    }
+
+    const direction = offset.normalize();
+    const verticalAlignment = Math.abs(direction.dot(new THREE.Vector3(0, 1, 0)));
+
+    if (verticalAlignment > 0.985) {
+        const distance = camera.position.distanceTo(target);
+
+        camera.position.x += Math.max(distance * 0.015, 1);
+    }
 }
 
 function setupScene(scene, camera) {
@@ -1909,8 +1941,37 @@ function createBodyLabel(body) {
     canvas.width = width;
     canvas.height = height;
 
+    if (THREE.SRGBColorSpace) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+    } else if (THREE.sRGBEncoding) {
+        texture.encoding = THREE.sRGBEncoding;
+    }
+
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    label.renderOrder = 35;
+    label.userData.aspect = width / height;
+    label.userData.bodyId = body.id;
+    label.userData.fallbackName = body.name || body.id;
+    label.userData.canvas = canvas;
+
+    updateBodyLabelTexture(label, body);
+
+    return label;
+}
+
+function updateBodyLabelTexture(label, body) {
+    const canvas = label.userData.canvas;
+    const texture = label.material?.map;
+
+    if (!canvas || !texture) {
+        return;
+    }
+
     const context = canvas.getContext("2d");
-    const labelText = body.name || body.id;
+    const width = canvas.width;
+    const height = canvas.height;
+    const labelText = getRendererBodyDisplayName(body);
 
     context.clearRect(0, 0, width, height);
     context.font = "700 30px Arial, sans-serif";
@@ -1921,20 +1982,16 @@ function createBodyLabel(body) {
     context.fillStyle = "rgba(255, 255, 255, 0.96)";
     context.fillText(labelText, width / 2, height / 2);
     context.shadowBlur = 0;
-
-    if (THREE.SRGBColorSpace) {
-        texture.colorSpace = THREE.SRGBColorSpace;
-    } else if (THREE.sRGBEncoding) {
-        texture.encoding = THREE.sRGBEncoding;
-    }
-
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
     texture.needsUpdate = true;
-    label.renderOrder = 35;
-    label.userData.aspect = width / height;
+}
 
-    return label;
+function getRendererBodyDisplayName(body) {
+    const bodyId = body?.id;
+    const fallback = body?.name || bodyId || "";
+
+    return bodyId
+        ? translateRendererText(`bodies.${bodyId}.name`, {}, fallback)
+        : fallback;
 }
 
 function createDisplayScale() {

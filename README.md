@@ -380,6 +380,7 @@ The app supports English and Portuguese through a small frontend i18n layer. The
 - Dynamic UI text, such as playback buttons, time readouts, body names, and body facts, calls the i18n service from the relevant screen or renderer module.
 - The language setting is defined in the `interface` category in `frontend/js/settings/settings-schema.js`.
 - Applying the interface setting dispatches `solar-sim:language-changed`; screens that render dynamic DOM should listen for that event and refresh their text.
+- Body labels in the Three.js scene are translated in the frontend from stable body ids, using keys such as `bodies.saturn.name`. Do not add localized planet names to Python scenario definitions; Python should expose canonical ids/metadata and the frontend chooses display text.
 
 Do not hardcode new visible UI text directly in renderer or screen logic. Add a translation key and use the i18n service. If Python-authored scenario facts are intended to be translated by the app, store fact keys such as `facts.earth.oneAu` in the body definition. If a future custom scenario uses plain fact strings, the frontend displays them as provided.
 

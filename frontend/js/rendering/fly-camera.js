@@ -17,6 +17,9 @@ window.SolarSim.rendering.createFlyCameraController = function createFlyCameraCo
 
     let enabled = false;
     let looking = false;
+    let lastLookClientX = 0;
+    let lastLookClientY = 0;
+    let hasLastLookClientPosition = false;
 
     camera.rotation.reorder("YXZ");
 
@@ -46,6 +49,7 @@ window.SolarSim.rendering.createFlyCameraController = function createFlyCameraCo
 
         enabled = false;
         looking = false;
+        hasLastLookClientPosition = false;
         pressedKeys.clear();
         domElement.removeEventListener("contextmenu", preventContextMenu);
         domElement.removeEventListener("mousedown", handleMouseDown);
@@ -111,6 +115,9 @@ window.SolarSim.rendering.createFlyCameraController = function createFlyCameraCo
 
         requestFlyInputStart();
         looking = true;
+        lastLookClientX = event.clientX;
+        lastLookClientY = event.clientY;
+        hasLastLookClientPosition = true;
         domElement.focus({ preventScroll: true });
         applyLookState();
         event.preventDefault();
@@ -122,6 +129,7 @@ window.SolarSim.rendering.createFlyCameraController = function createFlyCameraCo
         }
 
         looking = false;
+        hasLastLookClientPosition = false;
         applyLookState();
     }
 
@@ -154,13 +162,19 @@ window.SolarSim.rendering.createFlyCameraController = function createFlyCameraCo
             return;
         }
 
+        const pointerDelta = getLookPointerDelta(event);
         const sensitivity = getMouseSensitivity();
 
-        yaw -= event.movementX * sensitivity;
-        pitch -= event.movementY * sensitivity;
+        if (pointerDelta.x === 0 && pointerDelta.y === 0) {
+            return;
+        }
+
+        yaw -= pointerDelta.x * sensitivity;
+        pitch -= pointerDelta.y * sensitivity;
         pitch = clamp(pitch, -Math.PI / 2 + 0.02, Math.PI / 2 - 0.02);
 
         camera.rotation.set(pitch, yaw, 0);
+        event.preventDefault();
     }
 
     function preventContextMenu(event) {
@@ -170,6 +184,22 @@ window.SolarSim.rendering.createFlyCameraController = function createFlyCameraCo
     function applyLookState() {
         domElement.classList.toggle("is-camera-looking", looking);
         document.body.classList.toggle("is-simulation-camera-looking", looking);
+    }
+
+    function getLookPointerDelta(event) {
+        const movementX = Number(event.movementX);
+        const movementY = Number(event.movementY);
+        const fallbackX = hasLastLookClientPosition ? event.clientX - lastLookClientX : 0;
+        const fallbackY = hasLastLookClientPosition ? event.clientY - lastLookClientY : 0;
+
+        lastLookClientX = event.clientX;
+        lastLookClientY = event.clientY;
+        hasLastLookClientPosition = true;
+
+        return {
+            x: Number.isFinite(movementX) && movementX !== 0 ? movementX : fallbackX,
+            y: Number.isFinite(movementY) && movementY !== 0 ? movementY : fallbackY,
+        };
     }
 
     function handleKeyDown(event) {
