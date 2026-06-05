@@ -2,9 +2,28 @@ window.SolarSim = window.SolarSim || {};
 window.SolarSim.settings = window.SolarSim.settings || {};
 
 window.SolarSim.settings.schema = {
+    interface: {
+        label: "Interface",
+        summary: "Language and application text.",
+        description: "Change how the interface is displayed.",
+        controls: [
+            {
+                key: "language",
+                label: "Language",
+                type: "select",
+                defaultValue: "en",
+                owner: "interface",
+                description: "Controls visible application text.",
+                options: [
+                    { value: "en", label: "English" },
+                    { value: "pt", label: "Portuguese" },
+                ],
+            },
+        ],
+    },
     graphics: {
         label: "Graphics",
-        summary: "Renderer, display, frame pacing, and visual effects.",
+        summary: "Renderer, display, and frame pacing.",
         description: "Change the graphics according to preference.",
         controls: [
             {
@@ -49,40 +68,17 @@ window.SolarSim.settings.schema = {
                 type: "select",
                 defaultValue: "medium",
                 owner: "renderer",
-                description: "Maps to sphere geometry detail, texture quality, and trail quality.",
+                description: "Maps to sphere geometry detail.",
                 options: [
                     { value: "low", label: "Low" },
                     { value: "medium", label: "Medium" },
                     { value: "high", label: "High" },
                 ],
                 mapsTo: {
-                    low: { sphereGeometryDetail: 16, textureQuality: "low", trailQuality: "low", simulationStepsPerFrame: 2 },
-                    medium: { sphereGeometryDetail: 32, textureQuality: "medium", trailQuality: "medium", simulationStepsPerFrame: 4 },
-                    high: { sphereGeometryDetail: 64, textureQuality: "high", trailQuality: "high", simulationStepsPerFrame: 6 },
+                    low: { sphereGeometryDetail: 16 },
+                    medium: { sphereGeometryDetail: 32 },
+                    high: { sphereGeometryDetail: 64 },
                 },
-            },
-            {
-                key: "antiAliasing",
-                label: "Anti-aliasing",
-                type: "boolean",
-                defaultValue: true,
-                owner: "renderer",
-            },
-            {
-                key: "postProcessing",
-                label: "Post-processing",
-                type: "booleanGroup",
-                defaultValue: {
-                    bloom: false,
-                    motionBlur: false,
-                    depthOfField: false,
-                },
-                owner: "renderer",
-                options: [
-                    { value: "bloom", label: "Bloom" },
-                    { value: "motionBlur", label: "Motion blur" },
-                    { value: "depthOfField", label: "Depth of field" },
-                ],
             },
         ],
     },
@@ -99,8 +95,6 @@ window.SolarSim.settings.schema = {
                 owner: "python",
                 options: [
                     { value: "velocityVerlet", label: "Velocity Verlet" },
-                    { value: "euler", label: "Euler" },
-                    { value: "rk4", label: "RK4" },
                 ],
             },
             {
@@ -117,9 +111,8 @@ window.SolarSim.settings.schema = {
                 type: "select",
                 defaultValue: "medium",
                 owner: "renderer",
-                description: "Controls visual trail retention only.",
+                description: "Controls visual trail retention when body trails are enabled.",
                 options: [
-                    { value: "off", label: "Off" },
                     { value: "short", label: "Short" },
                     { value: "medium", label: "Medium" },
                     { value: "long", label: "Long" },
@@ -133,6 +126,16 @@ window.SolarSim.settings.schema = {
         summary: "Mouse input and camera distance limits.",
         description: "Mouse speed and camera configuration.",
         controls: [
+            {
+                key: "moveSpeed",
+                label: "Movement speed",
+                type: "range",
+                defaultValue: 135,
+                owner: "camera",
+                min: 20,
+                max: 420,
+                step: 5,
+            },
             {
                 key: "mouseSensitivity",
                 label: "Mouse sensitivity",
@@ -174,6 +177,8 @@ window.SolarSim.settings.schema = {
                 type: "booleanGroup",
                 defaultValue: {
                     showLabels: true,
+                    showOrbitLines: false,
+                    showTrails: false,
                     showVelocityVectors: false,
                     showAccelerationVectors: false,
                     showBarycenterMarker: false,
@@ -181,6 +186,8 @@ window.SolarSim.settings.schema = {
                 owner: "renderer",
                 options: [
                     { value: "showLabels", label: "Show labels" },
+                    { value: "showOrbitLines", label: "Orbit lines" },
+                    { value: "showTrails", label: "Body trails" },
                     { value: "showVelocityVectors", label: "Velocity vectors" },
                     { value: "showAccelerationVectors", label: "Acceleration vectors" },
                     { value: "showBarycenterMarker", label: "Barycenter marker" },
@@ -214,7 +221,7 @@ window.SolarSim.settings.schema = {
                 key: "momentumCheck",
                 label: "Momentum check",
                 type: "boolean",
-                defaultValue: true,
+                defaultValue: false,
                 owner: "python",
                 description: "Warns when summed system momentum differs from zero beyond backend tolerance.",
             },

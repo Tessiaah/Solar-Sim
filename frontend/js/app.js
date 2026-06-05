@@ -2,6 +2,14 @@ const settingsStore = window.SolarSim.settings.createStore(window.SolarSim.setti
 
 window.SolarSim.settings.store = settingsStore;
 
+const i18n = window.SolarSim.i18n.createI18n({
+    defaultLanguage: settingsStore.getState().interface.language,
+    translations: window.SolarSim.i18n.translations,
+});
+
+window.SolarSim.i18n.instance = i18n;
+i18n.applyDocument();
+
 const router = window.SolarSim.ui.createScreenRouter({
     initialScreen: "welcome",
 });

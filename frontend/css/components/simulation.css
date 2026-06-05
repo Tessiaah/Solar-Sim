@@ -1,4 +1,6 @@
 .simulation-screen {
+    height: 100vh;
+    min-height: 0;
     background: #05070b;
     overflow: hidden;
 }
@@ -12,6 +14,17 @@
     display: block;
     width: 100%;
     height: 100%;
+    cursor: grab;
+    outline: none;
+}
+
+.simulation-viewport canvas.is-camera-looking {
+    cursor: none;
+}
+
+body.is-simulation-camera-looking,
+body.is-simulation-camera-looking * {
+    cursor: none !important;
 }
 
 .simulation-toolbar {
@@ -21,18 +34,25 @@
     left: 20px;
     z-index: 4;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
     pointer-events: none;
 }
 
-.simulation-toolbar button,
-.simulation-readout {
+.simulation-toolbar > button[data-route="welcome"] {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+}
+
+.simulation-toolbar > button,
+.simulation-readout,
+.orientation-gizmo {
     pointer-events: auto;
 }
 
-.simulation-toolbar button {
+.simulation-toolbar > button {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -44,6 +64,12 @@
     color: var(--color-text);
     font: inherit;
     font-weight: 800;
+    cursor: pointer;
+}
+
+.simulation-toolbar > button:hover {
+    border-color: rgb(110 231 216 / 42%);
+    background: rgb(110 231 216 / 12%);
 }
 
 .simulation-readout {
@@ -58,4 +84,462 @@
     font-weight: 900;
     text-align: right;
     box-shadow: var(--shadow-panel);
+}
+
+.simulation-toolbar-right {
+    display: grid;
+    justify-items: end;
+    gap: 10px;
+}
+
+.orientation-gizmo {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    width: 92px;
+    user-select: none;
+}
+
+.orientation-gizmo-stage {
+    position: relative;
+    width: 92px;
+    height: 92px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.orientation-gizmo-stage:active {
+    cursor: grabbing;
+}
+
+.orientation-gizmo-lines {
+    position: absolute;
+    inset: 0;
+    width: 92px;
+    height: 92px;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.orientation-line {
+    stroke-width: 2;
+    stroke-linecap: round;
+    opacity: 0.74;
+}
+
+.orientation-line-x {
+    stroke: rgb(242 78 93);
+}
+
+.orientation-line-y {
+    stroke: rgb(126 206 62);
+}
+
+.orientation-line-z {
+    stroke: rgb(66 150 255);
+}
+
+.orientation-axis {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 25px;
+    height: 25px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / 30%);
+    border-radius: 999px;
+    color: var(--color-text);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 18%),
+        0 4px 9px rgb(0 0 0 / 34%);
+    transform: translate(-50%, -50%);
+    transition:
+        filter 120ms ease,
+        opacity 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.orientation-axis:hover {
+    filter: brightness(1.16);
+}
+
+.orientation-axis.is-negative {
+    width: 21px;
+    height: 21px;
+    background: transparent;
+    box-shadow:
+        inset 0 0 0 1.5px currentColor,
+        0 3px 8px rgb(0 0 0 / 28%);
+}
+
+.orientation-axis.is-behind {
+    opacity: 0.44;
+    filter: saturate(0.8);
+}
+
+.orientation-axis-x {
+    background: rgb(219 71 86 / 92%);
+    color: rgb(255 84 100);
+}
+
+.orientation-axis-y {
+    background: rgb(119 189 56 / 94%);
+    color: rgb(130 216 60);
+}
+
+.orientation-axis-z {
+    background: rgb(62 144 255 / 94%);
+    color: rgb(68 150 255);
+}
+
+.simulation-inspector {
+    position: absolute;
+    top: 92px;
+    left: 20px;
+    z-index: 5;
+    display: grid;
+    gap: 14px;
+    width: min(330px, calc(100% - 40px));
+    max-height: calc(100vh - 190px);
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: var(--radius-panel);
+    background: rgb(8 11 17 / 74%);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(18px);
+    pointer-events: auto;
+    scrollbar-color: var(--color-line-strong) rgb(7 9 13 / 80%);
+    scrollbar-width: thin;
+}
+
+.simulation-panel-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+}
+
+.simulation-panel-header span {
+    color: var(--color-accent);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.simulation-panel-header select {
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 10px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-small);
+    background: rgb(7 9 13 / 88%);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 700;
+}
+
+.body-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+
+.body-stats div {
+    min-width: 0;
+    min-height: 76px;
+    padding: 10px;
+    border: 1px solid rgb(255 255 255 / 10%);
+    border-radius: var(--radius-small);
+    background: rgb(255 255 255 / 4%);
+}
+
+.body-stats dt {
+    margin: 0 0 7px;
+    color: var(--color-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.body-stats dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--color-text);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.98rem;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+.quick-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.quick-controls button,
+.quick-controls label,
+.simulation-controls button,
+.camera-settings-menu summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-small);
+    background: rgb(16 21 29 / 82%);
+    color: var(--color-soft);
+    cursor: pointer;
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.86rem;
+    font-weight: 900;
+    text-align: center;
+}
+
+.quick-controls label {
+    gap: 7px;
+}
+
+.quick-controls input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--color-accent);
+}
+
+.quick-controls button:hover,
+.quick-controls label:hover,
+.simulation-controls button:hover,
+.camera-settings-menu summary:hover {
+    border-color: rgb(110 231 216 / 42%);
+    background: rgb(110 231 216 / 12%);
+    color: var(--color-text);
+}
+
+.body-facts {
+    display: grid;
+    gap: 9px;
+    padding-top: 2px;
+}
+
+.body-facts h2 {
+    margin: 0;
+    color: var(--color-accent-strong);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.body-facts ul {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.body-facts li {
+    position: relative;
+    min-width: 0;
+    padding: 8px 10px 8px 18px;
+    border: 1px solid rgb(255 255 255 / 8%);
+    border-radius: var(--radius-small);
+    background: rgb(255 255 255 / 3%);
+    color: var(--color-soft);
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.34;
+}
+
+.body-facts li::before {
+    position: absolute;
+    top: 15px;
+    left: 9px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-accent);
+    content: "";
+}
+
+.simulation-controls button:disabled {
+    cursor: not-allowed;
+    opacity: 0.46;
+}
+
+.simulation-controls {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    max-width: calc(100% - 40px);
+    padding: 10px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: var(--radius-panel);
+    background: rgb(8 11 17 / 76%);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(18px);
+    pointer-events: auto;
+    transform: translateX(-50%);
+}
+
+.simulation-speed-control {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding-left: 8px;
+    border-left: 1px solid rgb(255 255 255 / 12%);
+}
+
+.simulation-speed-control button {
+    min-width: 44px;
+    padding: 0 10px;
+}
+
+.simulation-speed-control button.is-active,
+.simulation-speed-control button[aria-pressed="true"] {
+    border-color: var(--color-accent);
+    background: rgb(110 231 216 / 16%);
+    color: var(--color-text);
+}
+
+.camera-settings-menu {
+    position: relative;
+}
+
+.camera-settings-menu summary {
+    min-width: 74px;
+    list-style: none;
+}
+
+.camera-settings-menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.camera-settings-menu[open] summary {
+    border-color: var(--color-accent);
+    background: rgb(110 231 216 / 16%);
+    color: var(--color-text);
+}
+
+.camera-settings-popover {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 12px);
+    display: grid;
+    gap: 12px;
+    width: min(260px, calc(100vw - 40px));
+    padding: 12px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: var(--radius-panel);
+    background: rgb(8 11 17 / 92%);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(18px);
+}
+
+.camera-settings-popover label {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    color: var(--color-soft);
+    font-size: 0.76rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.camera-setting-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 10px;
+    align-items: center;
+}
+
+.camera-setting-control input {
+    width: 100%;
+    accent-color: var(--color-accent);
+}
+
+.camera-setting-control output {
+    color: var(--color-text);
+    font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-align: right;
+}
+
+@media (max-width: 760px) {
+    .simulation-toolbar {
+        top: 12px;
+        right: 12px;
+        left: 12px;
+    }
+
+    .simulation-inspector {
+        top: 74px;
+        left: 12px;
+        width: calc(100% - 24px);
+        max-height: calc(100vh - 176px);
+    }
+
+    .simulation-controls {
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        max-width: none;
+        transform: none;
+    }
+}
+
+@media (max-width: 460px) {
+    .body-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .simulation-speed-control {
+        width: 100%;
+        padding-top: 8px;
+        padding-left: 0;
+        border-top: 1px solid rgb(255 255 255 / 12%);
+        border-left: 0;
+    }
+
+    .simulation-speed-control button {
+        flex: 1 1 0;
+    }
+
+    .camera-settings-menu {
+        width: 100%;
+    }
+
+    .camera-settings-menu summary {
+        width: 100%;
+    }
+
+    .camera-settings-popover {
+        right: auto;
+        left: 0;
+        width: 100%;
+    }
 }

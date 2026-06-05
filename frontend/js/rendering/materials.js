@@ -27,16 +27,15 @@ window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMateria
         textures: {},
     };
 
-    if (textureLoader?.setCrossOrigin) {
-        textureLoader.setCrossOrigin("anonymous");
-    }
-
     function createMaterial(body) {
         const visual = resolveBodyVisual(body);
         const textures = loadTextures(visual.textures);
-        const options = createMaterialOptions(visual, textures);
+        const options = createMaterialOptions(visual);
+        const material = createThreeMaterial(visual.kind, options);
 
-        return createThreeMaterial(visual.kind, options);
+        applyTexturesAfterLoad(material, textures, visual.kind);
+
+        return material;
     }
 
     function resolveBodyVisual(body) {
@@ -54,12 +53,11 @@ window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMateria
         };
     }
 
-    function createMaterialOptions(visual, textures) {
+    function createMaterialOptions(visual) {
         const options = {
             color: visual.color,
             roughness: visual.roughness,
             metalness: visual.metalness,
-            ...textures,
         };
 
         if (visual.emissive) {
@@ -118,12 +116,96 @@ window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMateria
         const cacheKey = `${textureType}:${textureUrl}`;
 
         if (!textureCache.has(cacheKey)) {
-            const texture = textureLoader.load(textureUrl);
+            configureTextureLoader(textureUrl);
+            const texture = textureLoader.load(textureUrl, markTextureLoaded);
+            const textureState = getTextureState(texture);
+
+            textureState.solarSimLoaded = false;
+            textureState.solarSimLoadCallbacks = [];
+            applyTextureSampling(texture);
             applyTextureColorSpace(texture, textureType);
             textureCache.set(cacheKey, texture);
         }
 
         return textureCache.get(cacheKey);
+    }
+
+    function configureTextureLoader(textureUrl) {
+        if (!textureLoader?.setCrossOrigin) {
+            return;
+        }
+
+        textureLoader.setCrossOrigin(isRemoteTextureUrl(textureUrl) ? "anonymous" : "");
+    }
+
+    function isRemoteTextureUrl(textureUrl) {
+        return /^https?:\/\//i.test(textureUrl);
+    }
+
+    function markTextureLoaded(texture) {
+        const textureState = getTextureState(texture);
+
+        textureState.solarSimLoaded = true;
+        textureState.solarSimLoadCallbacks.forEach((callback) => callback());
+        textureState.solarSimLoadCallbacks = [];
+    }
+
+    function applyTexturesAfterLoad(material, textures, kind) {
+        const supportedTypes = getSupportedTextureTypesForMaterial(kind);
+
+        Object.entries(textures)
+            .filter(([textureType]) => supportedTypes.has(textureType))
+            .forEach(([textureType, texture]) => {
+                runAfterTextureLoad(texture, () => {
+                    material[textureType] = texture;
+
+                    if (textureType === "map") {
+                        material.color?.set("#ffffff");
+                    }
+
+                    material.needsUpdate = true;
+                });
+            });
+    }
+
+    function runAfterTextureLoad(texture, callback) {
+        const textureState = getTextureState(texture);
+
+        if (textureState.solarSimLoaded) {
+            callback();
+            return;
+        }
+
+        textureState.solarSimLoadCallbacks.push(callback);
+    }
+
+    function getSupportedTextureTypesForMaterial(kind) {
+        if (kind === "basic") {
+            return new Set(["map", "alphaMap"]);
+        }
+
+        return supportedTextureTypes;
+    }
+
+    function getTextureState(texture) {
+        texture.userData = texture.userData || {};
+        texture.userData.solarSimLoadCallbacks = texture.userData.solarSimLoadCallbacks || [];
+
+        return texture.userData;
+    }
+
+    function applyTextureSampling(texture) {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.anisotropy = 4;
+
+        if (THREE.LinearMipmapLinearFilter) {
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+        }
+
+        if (THREE.LinearFilter) {
+            texture.magFilter = THREE.LinearFilter;
+        }
     }
 
     function applyTextureColorSpace(texture, textureType) {
@@ -143,5 +225,13 @@ window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMateria
 
     return {
         createMaterial,
+        dispose,
     };
+
+    function dispose() {
+        textureCache.forEach((texture) => {
+            texture.dispose();
+        });
+        textureCache.clear();
+    }
 };

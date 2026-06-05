@@ -61,12 +61,8 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
         frameIntervalMs: getFrameInterval(initialGraphicsSettings),
         lastFrameTime: 0,
         renderQuality: initialGraphicsSettings?.renderQuality || "medium",
-        antiAliasing: initialGraphicsSettings?.antiAliasing ?? true,
-        postProcessing: initialGraphicsSettings?.postProcessing || {
-            bloom: false,
-            motionBlur: false,
-            depthOfField: false,
-        },
+        imageSmoothingEnabled: true,
+        visualEffects: createWelcomeVisualEffectsDefaults(),
         width: 0,
         height: 0,
         pixelRatio: 1,
@@ -83,7 +79,7 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
         canvas.style.width = `${state.width}px`;
         canvas.style.height = `${state.height}px`;
         context.setTransform(state.pixelRatio, 0, 0, state.pixelRatio, 0, 0);
-        context.imageSmoothingEnabled = state.antiAliasing;
+        context.imageSmoothingEnabled = state.imageSmoothingEnabled;
 
         state.particles = createParticles(state.width, state.height, state.renderQuality);
         state.orbitCount = getOrbitCountForQuality(state.renderQuality);
@@ -116,10 +112,16 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
         applySettings(graphicsSettings) {
             state.frameIntervalMs = getFrameInterval(graphicsSettings);
             state.renderQuality = graphicsSettings.renderQuality;
-            state.antiAliasing = graphicsSettings.antiAliasing;
-            state.postProcessing = graphicsSettings.postProcessing;
             resize();
         },
+    };
+}
+
+function createWelcomeVisualEffectsDefaults() {
+    return {
+        bloom: false,
+        motionBlur: false,
+        depthOfField: false,
     };
 }
 
@@ -150,7 +152,7 @@ function createParticles(width, height, renderQuality) {
 }
 
 function clearBackdrop(context, state) {
-    if (state.postProcessing.motionBlur) {
+    if (state.visualEffects.motionBlur) {
         context.fillStyle = "rgba(7, 9, 13, 0.32)";
         context.fillRect(0, 0, state.width, state.height);
         return;
@@ -167,14 +169,14 @@ function drawStars(context, particles, elapsed, state) {
     particles.forEach((particle, index) => {
         const pulse = Math.sin(elapsed * 22 + index) * 0.18;
         const orbitInfluence = particle.layer > 0.62 ? 1 : 0;
-        const depthScale = state.postProcessing.depthOfField && particle.layer < 0.28 ? 0.48 : 1;
+        const depthScale = state.visualEffects.depthOfField && particle.layer < 0.28 ? 0.48 : 1;
         const angle = particle.orbitAngle + elapsed * particle.orbitSpeed;
         const orbitX = Math.cos(angle) * particle.orbitRadius * 0.18 * orbitInfluence;
         const orbitY = Math.sin(angle) * particle.orbitRadius * 0.08 * orbitInfluence;
         const x = particle.x + orbitX + (driftCenterX - particle.x) * 0.015 * orbitInfluence;
         const y = particle.y + orbitY + (driftCenterY - particle.y) * 0.015 * orbitInfluence;
         const alpha = Math.max(0.22, Math.min(1, particle.alpha + pulse)) * depthScale;
-        const bloomScale = state.postProcessing.bloom ? 8 : 4.5;
+        const bloomScale = state.visualEffects.bloom ? 8 : 4.5;
 
         context.beginPath();
         context.fillStyle = `rgba(255, 255, 255, ${alpha})`;
@@ -220,7 +222,7 @@ function drawBodyOnOrbit(context, centerX, centerY, radius, tilt, elapsed, index
 
     context.beginPath();
     context.shadowColor = "rgba(255, 255, 255, 0.82)";
-    context.shadowBlur = bodyRadius * (state.postProcessing.bloom ? 8 : 4);
+    context.shadowBlur = bodyRadius * (state.visualEffects.bloom ? 8 : 4);
     context.fillStyle = index === 0 ? "#ffffff" : "rgba(255, 255, 255, 0.92)";
     context.arc(centerX + rotatedX, centerY + rotatedY, bodyRadius, 0, TWO_PI);
     context.fill();

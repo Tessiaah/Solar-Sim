@@ -37,8 +37,10 @@ Keep responsibilities separated:
 Simulation types live in `src/simulation/body.py`:
 
 - `BodyState`: dynamic position and velocity vectors.
-- `BodyVisual`: static renderer-facing visual metadata such as material type, colors, and texture paths.
-- `CelestialBody`: static body definition such as name, mass, radius, color, parent, fixed-state flag, and visual metadata.
+- `BodyVisual`: static renderer-facing visual metadata such as material type, colors, texture paths, and optional ring definitions.
+- `BodyRing` / `BodyRingBand`: static ring metadata in meters. The renderer uses this for visual rings only; it does not affect physics.
+- `BodyOrbit`: static expected-orbit metadata for renderer guide lines, such as semi-major axis, eccentricity, inclination, and fixed orbit center.
+- `CelestialBody`: static body definition such as name, mass, radius, color, parent, fixed-state flag, visual metadata, and optional body facts.
 - `SimBody`: combines a `CelestialBody` definition with a mutable `BodyState`.
 
 Physics lives in `src/simulation/physics.py`:
@@ -55,6 +57,13 @@ Currently implemented scenario:
 - `create_sun_earth_system()`
 - Sun and Earth are both `isfixed=False`.
 - The Sun receives a small opposite Y velocity to approximately balance Earth's momentum.
+
+Additional current scenario:
+- `create_solar_system()`
+- Includes the Sun, Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.
+- Planet positions and velocities are simplified initial conditions based on constants in `src/data/constants.py`, not full astronomical ephemerides.
+- Planets start at distributed orbital phases so the initial view is not a single overlapping radial line.
+- The Sun receives an initial velocity calculated from the summed planetary momentum so it is not artificially fixed.
 
 Runtime orchestration lives in `src/simulation/runtime.py`.
 
@@ -82,14 +91,17 @@ Frontend entrypoint:
 Main frontend areas:
 
 - `frontend/js/app.js`: initializes settings, router, and screens.
+- `frontend/js/i18n/translations.js`: English and Portuguese translation dictionaries.
+- `frontend/js/i18n/i18n.js`: translation service, DOM translation application, and language change events.
 - `frontend/js/ui/screen-router.js`: screen routing.
 - `frontend/js/screens/welcome.js`: welcome screen behavior.
 - `frontend/js/screens/settings.js`: settings UI.
-- `frontend/js/screens/simulation.js`: simulation screen startup/stop behavior.
+- `frontend/js/screens/simulation.js`: simulation screen startup/stop behavior and DOM bindings for playback, selected-body inspection, quick settings, and time controls.
 - `frontend/js/api/backend-api.js`: small JavaScript adapter around PyWebView API calls.
 - `frontend/js/rendering/simulation-renderer.js`: Three.js simulation scene and body mesh updates.
 - `frontend/js/rendering/materials.js`: material and texture creation.
 - `frontend/js/rendering/space-backdrop.js`: Three.js starfield background.
+- `frontend/js/rendering/fly-camera.js`: simulation camera movement, RMB pointer-lock mouse look, and scroll zoom.
 
 CSS is under `frontend/css`.
 
@@ -150,12 +162,22 @@ Static body metadata includes identity, physical constants needed for rendering 
     "radiusM": ...,
     "color": "#4f85ff",
     "isFixed": False,
-    "parent": None,
+    "parent": "Sun",
+    "parentId": "sun",
+    "facts": ["facts.earth.scaleReference", ...],
+    "orbit": {
+        "semiMajorAxisM": ...,
+        "eccentricity": 0.0,
+        "inclinationRad": 0.0,
+        "longitudeOfAscendingNodeRad": 0.0,
+        "argumentOfPeriapsisRad": 0.0,
+        "centerM": [0.0, 0.0, 0.0],
+    },
     "visual": {...},
 }
 ```
 
-The renderer caches static metadata and uses dynamic snapshots only to update mesh positions.
+The renderer caches static metadata and uses dynamic snapshots only to update mesh positions. Body facts are translation keys when they are app-authored facts; user/authored scenarios may still provide plain strings as a fallback.
 
 ## Visuals and Textures
 
@@ -176,6 +198,23 @@ visual=BodyVisual(
 )
 ```
 
+Ringed bodies can define rings on the same visual metadata:
+
+```python
+visual=BodyVisual(
+    kind="standard",
+    textures={"map": "./assets/textures/planets/saturn.jpg"},
+    rings=(
+        BodyRing(
+            inner_radius_m=66_900_000.0,
+            outer_radius_m=140_220_000.0,
+            tilt_rad=np.deg2rad(26.73),
+            bands=(...),
+        ),
+    ),
+)
+```
+
 Supported texture keys are defined in `frontend/js/rendering/materials.js`:
 
 - `map`
@@ -192,6 +231,21 @@ Color textures such as `map` and `emissiveMap` are treated as sRGB by the render
 
 Texture paths may point to local frontend assets or remote URLs, subject to browser/PyWebView loading and CORS behavior.
 
+Current planet texture assets live in:
+
+- `frontend/assets/textures/planets`
+
+The current `create_solar_system()` and `create_sun_earth_system()` factories assign local texture maps through `BodyVisual.textures`. Keep texture selection on the body definitions, not in `SCENARIOS` and not in renderer conditionals.
+
+Renderer material behavior:
+
+- If a body has a `map` texture, the material color defaults to white so the texture is not tinted by the fallback body color.
+- If a body has no `map`, the renderer uses the body color or `visual.baseColor`.
+- `aoMap` is supported with duplicated sphere UVs through `uv2`.
+- Texture maps use repeated horizontal wrapping and linear mipmap filtering for cleaner sphere projection.
+- Texture objects are cached by texture type and URL while a scenario is active.
+- The material factory exposes `dispose()` so cached textures can be released when scenario metadata is replaced or the renderer is destroyed.
+
 ## Rendering
 
 `frontend/js/rendering/simulation-renderer.js` owns the Three.js simulation scene.
@@ -199,18 +253,92 @@ Texture paths may point to local frontend assets or remote URLs, subject to brow
 Current rendering behavior:
 
 - Creates a Three.js scene, camera, WebGL renderer, point light, and ambient light.
-- Adds a starfield background from `space-backdrop.js`.
+- Adds a layered space backdrop from `space-backdrop.js`, including white pin stars, subtle glow stars, a faint galactic dust band, restrained nebula haze, distant galaxy smudges, star clusters, and soft dust wisps.
 - Creates one mesh per simulation body using cached scenario metadata.
+- Creates textured ring meshes from `visual.rings` metadata when a body defines rings. Saturn currently uses a renderer-generated procedural ring texture from D/C/B/A/F band metadata, with the Cassini gap represented as transparent texture space. Ring texture scrolling and subtle in-plane spin are visual-only animation.
 - Updates mesh positions from dynamic snapshots.
+- Updates the primary point light from the simulated Sun position, or from the first emissive body if no `sun` body exists.
+- Creates renderer-owned label sprites and a renderer-owned selected-body marker.
+- Creates renderer-owned orbit lines with `THREE.LineLoop` when the orbit toggle is enabled.
+- Builds orbit lines from static `BodyOrbit` metadata, not from live planet-to-parent snapshot distances.
+- Creates renderer-owned body trails only when the `debug.uiToggles.showTrails` setting is enabled. The `simulation.trailSystem` setting controls trail retention length, not whether trails are visible.
 - Recreates meshes when scenario metadata changes.
+- Uses a run-token guarded animation loop so stale async backend calls cannot restart rendering after the simulation screen has stopped.
+- Keeps rendering every animation frame while backend step requests run asynchronously, so camera movement and UI rendering stay responsive when paused or waiting on Python.
+- Exposes a small screen-facing API for selection, labels, camera focus, tracking, playback state, speed, stepping, and scenario reset.
+- Exposes `destroy()` for renderer teardown.
 
 Display scaling is renderer-only:
 
-- Position scale: `1 / 1_500_000_000`
-- Radius scale: `1 / 25_000_000`
-- Minimum rendered radius: `1.2`
+- Orbital positions use an origin-preserving display scale. Distances up to `1 AU` are linear, so small barycentric Sun movement stays visually small instead of being pushed away from the origin.
+- Distances beyond `1 AU` are square-root compressed so the outer planets remain usable on screen.
+- Rendered radii are intentionally compressed for readability.
+- The Sun renders at a fixed visual radius of `36` scene units.
+- Planet radii use `4.2 + sqrt(radiusM / EarthRadiusM) * 4.2`, capped at `22` scene units.
 
 Physics remains in SI units in Python.
+
+The renderer centralizes physics-to-scene conversion through its display scale helper. Visual features such as trails, labels, vectors, orbit lines, picking, and camera focus should use the same conversion path instead of repeating the axis swap or square-root distance compression manually.
+
+Expected orbit guide lines are static visual references. They are generated when scenario metadata is applied, using `orbit.semiMajorAxisM`, `orbit.eccentricity`, orbital angles, and `orbit.centerM`. They should not be recalculated from the current snapshot each frame.
+
+### Three.js Object Ownership
+
+The renderer owns all Three.js objects it creates:
+
+- body meshes and their geometries/materials;
+- the WebGL renderer and canvas;
+- the starfield backdrop;
+- the primary point light and fill light;
+- the fly camera controller;
+- body label sprites and the selected-body marker;
+- orbit line objects.
+
+When scenario metadata changes, existing body meshes, labels, and orbit lines are removed and disposed before new meshes are created. The material texture cache is also cleared at that boundary. When the renderer is destroyed, it stops the animation loop, removes event listeners, disposes body meshes, labels, orbit lines, the selection marker, the backdrop, cached textures, the WebGL renderer, and removes the canvas.
+
+### Simulation Screen Controls
+
+The simulation screen has a frontend-owned control layer in `frontend/js/screens/simulation.js`.
+
+Current controls:
+
+- Entering the simulation screen from the welcome/menu flow reloads the current scenario through the backend, so elapsed simulation time starts from zero instead of resuming from a previous visit. Returning from Settings that were opened inside the simulation resumes the existing scene.
+- Body selector: selects a body for inspection and visual highlighting.
+- Time readout: displays elapsed simulation days and an equivalent year conversion. The renderer smooths only the displayed readout between backend snapshots; Python still owns the actual elapsed simulation time.
+- Body stats: displays static mass/radius metadata and dynamic distance/velocity from the latest backend snapshot.
+- Facts: displays backend-provided body facts plus derived runtime facts such as parent body, integration status, texture usage, and timestep.
+- Focus: moves the camera near the selected body.
+- Labels: toggles renderer-owned label sprites and persists that toggle through the in-memory settings store.
+- Orbits: toggles renderer-owned circular orbit guide lines around each body's parent and persists that toggle through the in-memory settings store.
+- Track: keeps the camera looking at the selected body.
+- Pause/Resume: stops or resumes automatic backend `step_simulation(...)` requests.
+- Step: while paused, requests one backend step.
+- Reset: reloads the current scenario through `load_scenario(...)`.
+- Speed buttons: set how many backend integration steps are requested per rendered frame (`1`, `4`, `16`, or `64`).
+- Camera dropdown: exposes quick camera movement speed and mouse sensitivity controls. These write to the same runtime `camera` settings store used by the full Settings screen.
+- Orientation gizmo: shows the current camera orientation under the time readout. The screen projects world axes into a small Blender-style overlay instead of rotating DOM labels directly. Axis endpoint buttons snap to orthographic front/back/right/left/top/bottom views. Dragging the gizmo or starting fly-camera movement returns to perspective camera behavior.
+- Diagnostics drawer: bottom-right collapsible drawer that is always available in the simulation screen. It shows the full diagnostics/settings snapshot at once when expanded, including FPS, frame time, renderer quality, timestep, trail counts, vector counts, energy, relative energy drift, momentum, and barycenter distance. It is independent from debug overlay toggles.
+- Debug overlay: compact simulation overlay driven by debug settings. Enabling FPS, frame-time graph, step-time, energy, momentum, body trails, vectors, or barycenter marker shows the corresponding overlay row or graph. The overlay has a lock button; when unlocked, it can be dragged by its header.
+- `Esc`: opens the Settings screen from inside the simulation. When Settings was opened from simulation, the Settings back button returns to the existing simulation session instead of resetting through the welcome screen.
+
+The speed buttons do not change Python's fixed timestep or integrator. They only change the `steps` argument sent to the backend step API. Python still owns the timestep and advances physics with `SimulationRuntime.step(...)`.
+
+### Camera Controls
+
+The simulation viewport now has a frontend-owned fly camera.
+
+Controls:
+
+- Hold the right mouse button on the simulation canvas and move the mouse to look around. The cursor is hidden while RMB is held without using browser Pointer Lock, avoiding the browser's pointer-lock escape hint.
+- Scroll the mouse wheel to move forward/back along the current view direction.
+- `W` / `S`: move forward/backward.
+- `A` / `D`: strafe left/right.
+- `Space` or `E`: move up.
+- `Ctrl` or `Q`: move down.
+- Hold `Shift` to move faster.
+- Drag the orientation gizmo to orbit the camera around the current view target. Orbit dragging switches back to perspective projection.
+
+The camera is visual-only. It does not mutate Python physics state, body positions, velocities, forces, or timesteps. Camera movement speed, mouse sensitivity, and min/max zoom distance are renderer-owned settings under the `camera` category in `frontend/js/settings/settings-schema.js`.
 
 ## Settings
 
@@ -227,6 +355,34 @@ Settings behavior is applied by:
 
 Graphics and debug settings are renderer/UI owned. Physics settings shown in the UI must not directly mutate Python physics state unless an explicit backend API is added for that purpose.
 
+Currently implemented runtime settings:
+
+- Interface language switches English/Portuguese text through the frontend i18n layer.
+- Window resolution and display mode are sent through the host-window API where PyWebView supports them.
+- FPS limit throttles the renderer frame loop.
+- Render quality changes sphere geometry detail and renderer pixel ratio.
+- Body trails are off by default and can be enabled through the debug UI toggles. The simulation trail system setting controls only the renderer-owned retention length.
+- Camera speed, mouse sensitivity, and min/max zoom distance affect the fly-camera controller.
+- Labels, orbit lines, velocity vectors, acceleration vectors, and the barycenter marker toggle renderer-owned Three.js objects.
+- The diagnostics drawer is always available on the simulation screen and shows all diagnostics rows/graphs when expanded.
+- Energy diagnostics display total energy plus relative energy drift, computed as `(E_current - E_initial) / abs(E_initial)`. This is the preferred graph for checking whether the integrator is conserving energy.
+- Performance, energy, momentum, trail, vector, and barycenter debug toggles also drive the compact debug overlay.
+
+Python snapshots now include read-only diagnostics for acceleration, kinetic/potential/total energy, total momentum, and barycenter. The frontend only displays this data; it does not compute or mutate physics forces.
+
+## Language Support
+
+The app supports English and Portuguese through a small frontend i18n layer. There is no build step and no external translation package.
+
+- Translation dictionaries live in `frontend/js/i18n/translations.js`.
+- The runtime translation service lives in `frontend/js/i18n/i18n.js`.
+- Static HTML uses `data-i18n`, `data-i18n-aria-label`, and `data-i18n-title`.
+- Dynamic UI text, such as playback buttons, time readouts, body names, and body facts, calls the i18n service from the relevant screen or renderer module.
+- The language setting is defined in the `interface` category in `frontend/js/settings/settings-schema.js`.
+- Applying the interface setting dispatches `solar-sim:language-changed`; screens that render dynamic DOM should listen for that event and refresh their text.
+
+Do not hardcode new visible UI text directly in renderer or screen logic. Add a translation key and use the i18n service. If Python-authored scenario facts are intended to be translated by the app, store fact keys such as `facts.earth.oneAu` in the body definition. If a future custom scenario uses plain fact strings, the frontend displays them as provided.
+
 ## Development Notes
 
 - The frontend is plain scripts loaded by `index.html`; script order matters.
@@ -234,6 +390,44 @@ Graphics and debug settings are renderer/UI owned. Physics settings shown in the
 - Avoid placing simulation logic in `HostWindowApi`.
 - Avoid sending static visual/material metadata on every simulation step.
 - Avoid duplicating body identity or visual data in `SCENARIOS`.
+- Keep camera behavior in frontend rendering code. Camera movement must not request or mutate backend physics state.
+- New Three.js object systems should provide a disposal path before they are attached to renderer lifecycle.
+- New visual systems should use the renderer's scene-position conversion helper rather than repeating meter-to-scene scaling and axis conversion.
+- Orbit guide lines should use static orbit metadata from Python. Do not derive guide-line radius or shape from changing runtime snapshots.
+- Keep playback controls separate from graphics quality. Render quality may change sphere detail and pixel ratio; simulation speed belongs to the simulation control bar and should not be hidden inside graphics presets.
+- Avoid generic top-level helper names in frontend scripts. The app uses classic script tags, so shared names can collide across files.
+- Keep translatable UI copy in `frontend/js/i18n/translations.js`; body/scenario factories may choose fact keys, but they should not duplicate translated prose.
+
+## JavaScript Checks
+
+A local portable Node.js install can be kept under `.tools/node` for syntax checks without requiring a system-wide Node installation. The current workspace uses Node `v24.16.0`.
+
+Run frontend syntax checks from the project root:
+
+```powershell
+$node = ".\.tools\node\node.exe"
+$files = @(
+  "frontend\js\api\backend-api.js",
+  "frontend\js\i18n\translations.js",
+  "frontend\js\i18n\i18n.js",
+  "frontend\js\settings\settings-schema.js",
+  "frontend\js\settings\settings-store.js",
+  "frontend\js\settings\settings-effects.js",
+  "frontend\js\ui\screen-router.js",
+  "frontend\js\rendering\materials.js",
+  "frontend\js\rendering\space-backdrop.js",
+  "frontend\js\rendering\fly-camera.js",
+  "frontend\js\rendering\simulation-renderer.js",
+  "frontend\js\screens\welcome.js",
+  "frontend\js\screens\settings.js",
+  "frontend\js\screens\simulation.js",
+  "frontend\js\app.js"
+)
+foreach ($file in $files) {
+  & $node --check $file
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+```
 
 ## Install Dependencies
 

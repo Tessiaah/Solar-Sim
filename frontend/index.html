@@ -12,12 +12,15 @@
         <link rel="stylesheet" href="./css/components/simulation.css">
         <script defer src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
         <script defer src="./js/api/backend-api.js"></script>
+        <script defer src="./js/i18n/translations.js"></script>
+        <script defer src="./js/i18n/i18n.js"></script>
         <script defer src="./js/settings/settings-schema.js"></script>
         <script defer src="./js/settings/settings-store.js"></script>
         <script defer src="./js/settings/settings-effects.js"></script>
         <script defer src="./js/ui/screen-router.js"></script>
         <script defer src="./js/rendering/materials.js"></script>
         <script defer src="./js/rendering/space-backdrop.js"></script>
+        <script defer src="./js/rendering/fly-camera.js"></script>
         <script defer src="./js/rendering/simulation-renderer.js"></script>
         <script defer src="./js/screens/welcome.js"></script>
         <script defer src="./js/screens/settings.js"></script>
@@ -26,18 +29,146 @@
     </head>
     <body>
         <div id="app" class="app-shell">
-            <aside id="performance-overlay" class="performance-overlay" aria-label="Performance overlay">
-                <div data-overlay-row="fps">
-                    <span>FPS</span>
-                    <strong data-overlay-value="fps">--</strong>
+            <aside id="performance-overlay" class="performance-overlay is-collapsed" aria-label="Diagnostics drawer" data-i18n-aria-label="overlay.performance">
+                <button type="button" class="metrics-drawer-toggle" data-metrics-toggle aria-expanded="false">
+                    <span data-i18n="overlay.performance">Diagnostics</span>
+                    <span class="metrics-drawer-arrow" aria-hidden="true"></span>
+                </button>
+
+                <div class="metrics-drawer-content" data-metrics-content>
+                    <section class="metrics-section" data-metric-section="performance">
+                        <h2 data-i18n="overlay.performanceSection">Performance</h2>
+                        <div class="metrics-row" data-overlay-row="fps">
+                            <span data-i18n="overlay.fps">FPS</span>
+                            <strong data-overlay-value="fps">--</strong>
+                        </div>
+                        <div class="metrics-row" data-overlay-row="frameTime">
+                            <span data-i18n="overlay.frame">Frame</span>
+                            <strong data-overlay-value="frameTime">-- ms</strong>
+                        </div>
+                        <canvas class="metrics-graph" width="220" height="44" data-metrics-graph="frameTime" aria-hidden="true"></canvas>
+                    </section>
+
+                    <section class="metrics-section" data-metric-section="renderer">
+                        <h2 data-i18n="overlay.rendererSection">Renderer</h2>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.fpsLimit">FPS limit</span>
+                            <strong data-overlay-value="fpsLimit">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.quality">Quality</span>
+                            <strong data-overlay-value="renderQuality">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.pixelRatio">Pixel ratio</span>
+                            <strong data-overlay-value="pixelRatio">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.geometry">Sphere detail</span>
+                            <strong data-overlay-value="sphereGeometryDetail">--</strong>
+                        </div>
+                    </section>
+
+                    <section class="metrics-section" data-metric-section="simulation">
+                        <h2 data-i18n="overlay.simulationSection">Simulation</h2>
+                        <div class="metrics-row" data-overlay-row="simulationStep">
+                            <span data-i18n="overlay.step">Step</span>
+                            <strong data-overlay-value="simulationStep">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.timestep">Timestep</span>
+                            <strong data-overlay-value="timestep">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.trails">Trail points</span>
+                            <strong data-overlay-value="trailPointCount">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.vectors">Vectors</span>
+                            <strong data-overlay-value="vectorCount">--</strong>
+                        </div>
+                    </section>
+
+                    <section class="metrics-section" data-metric-section="diagnostics">
+                        <h2 data-i18n="overlay.diagnosticsSection">Diagnostics</h2>
+                        <div class="metrics-row" data-overlay-row="energy">
+                            <span data-i18n="overlay.energy">Energy</span>
+                            <strong data-overlay-value="energy">--</strong>
+                        </div>
+                        <div class="metrics-row" data-overlay-row="energyError">
+                            <span data-i18n="overlay.energyError">Energy drift</span>
+                            <strong data-overlay-value="energyError">--</strong>
+                        </div>
+                        <canvas class="metrics-graph" width="220" height="44" data-metrics-graph="energy" aria-hidden="true"></canvas>
+                        <div class="metrics-row" data-overlay-row="momentum">
+                            <span data-i18n="overlay.momentum">Momentum</span>
+                            <strong data-overlay-value="momentum">--</strong>
+                        </div>
+                        <div class="metrics-row" data-overlay-row="barycenter">
+                            <span data-i18n="overlay.barycenter">Barycenter</span>
+                            <strong data-overlay-value="barycenter">--</strong>
+                        </div>
+                    </section>
+
+                    <section class="metrics-section" data-metric-section="camera">
+                        <h2 data-i18n="overlay.cameraSection">Camera</h2>
+                        <div class="metrics-row">
+                            <span data-i18n="simulation.cameraSpeed">Speed</span>
+                            <strong data-overlay-value="cameraSpeed">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="simulation.cameraSensitivity">Sensitivity</span>
+                            <strong data-overlay-value="cameraSensitivity">--</strong>
+                        </div>
+                    </section>
                 </div>
-                <div data-overlay-row="frameTime">
-                    <span>Frame</span>
-                    <strong data-overlay-value="frameTime">-- ms</strong>
+            </aside>
+
+            <aside id="debug-overlay" class="debug-overlay" aria-label="Debug overlay" data-i18n-aria-label="overlay.debug">
+                <header class="debug-overlay-header" data-debug-drag-handle>
+                    <span data-i18n="overlay.debug">Debug</span>
+                    <button type="button" class="debug-overlay-lock" data-debug-overlay-lock aria-pressed="true" aria-label="Unlock debug overlay" data-i18n-aria-label="overlay.unlockDebugOverlay">
+                        <span class="debug-lock-icon" aria-hidden="true"></span>
+                    </button>
+                </header>
+
+                <div class="debug-overlay-row" data-debug-row="fps">
+                    <span data-i18n="overlay.fps">FPS</span>
+                    <strong data-debug-value="fps">--</strong>
                 </div>
-                <div data-overlay-row="simulationStep">
-                    <span>Step</span>
-                    <strong data-overlay-value="simulationStep">Backend</strong>
+                <div class="debug-overlay-row" data-debug-row="frameTime">
+                    <span data-i18n="overlay.frame">Frame</span>
+                    <strong data-debug-value="frameTime">-- ms</strong>
+                </div>
+                <canvas class="debug-overlay-graph" width="230" height="42" data-debug-graph="frameTime" aria-hidden="true"></canvas>
+                <div class="debug-overlay-row" data-debug-row="simulationStep">
+                    <span data-i18n="overlay.step">Step</span>
+                    <strong data-debug-value="simulationStep">--</strong>
+                </div>
+                <div class="debug-overlay-row" data-debug-row="energy">
+                    <span data-i18n="overlay.energy">Energy</span>
+                    <strong data-debug-value="energy">--</strong>
+                </div>
+                <div class="debug-overlay-row" data-debug-row="energyError">
+                    <span data-i18n="overlay.energyError">Energy drift</span>
+                    <strong data-debug-value="energyError">--</strong>
+                </div>
+                <canvas class="debug-overlay-graph" width="230" height="42" data-debug-graph="energy" aria-hidden="true"></canvas>
+                <div class="debug-overlay-row" data-debug-row="momentum">
+                    <span data-i18n="overlay.momentum">Momentum</span>
+                    <strong data-debug-value="momentum">--</strong>
+                </div>
+                <div class="debug-overlay-row" data-debug-row="trails">
+                    <span data-i18n="overlay.trails">Trail points</span>
+                    <strong data-debug-value="trailPointCount">--</strong>
+                </div>
+                <div class="debug-overlay-row" data-debug-row="vectors">
+                    <span data-i18n="overlay.vectors">Vectors</span>
+                    <strong data-debug-value="vectorCount">--</strong>
+                </div>
+                <div class="debug-overlay-row" data-debug-row="barycenter">
+                    <span data-i18n="overlay.barycenter">Barycenter</span>
+                    <strong data-debug-value="barycenter">--</strong>
                 </div>
             </aside>
 
@@ -51,39 +182,39 @@
                     </div>
 
                     <div class="welcome-copy">
-                        <p class="welcome-kicker">N-body orbital sandbox</p>
+                        <p class="welcome-kicker" data-i18n="welcome.kicker">N-body orbital sandbox</p>
                         <h1 id="welcome-title">Solar Sim</h1>
-                        <p class="welcome-summary">
+                        <p class="welcome-summary" data-i18n="welcome.summary">
                             Build, inspect, and run gravitational systems from a clean simulation workspace.
                         </p>
                     </div>
 
-                    <nav class="welcome-actions" aria-label="Main navigation">
+                    <nav class="welcome-actions" aria-label="Main navigation" data-i18n-aria-label="welcome.mainNavigation">
                         <button class="primary-action" type="button" data-route="simulation">
-                            <span>Start Simulation</span>
+                            <span data-i18n="welcome.startSimulation">Start Simulation</span>
                             <span class="app-icon app-icon-arrow-right action-icon" aria-hidden="true"></span>
                         </button>
 
                         <div class="secondary-actions">
-                            <button type="button" data-route="scenarios">Scenarios</button>
-                            <button type="button" data-route="settings">Settings</button>
-                            <button type="button" data-route="about">About</button>
-                            <button type="button" class="quit-action" data-app-command="quit">Quit</button>
+                            <button type="button" data-route="scenarios" data-i18n="welcome.scenarios">Scenarios</button>
+                            <button type="button" data-route="settings" data-i18n="welcome.settings">Settings</button>
+                            <button type="button" data-route="about" data-i18n="welcome.about">About</button>
+                            <button type="button" class="quit-action" data-app-command="quit" data-i18n="welcome.quit">Quit</button>
                         </div>
                     </nav>
                 </section>
 
-                <aside class="welcome-status" aria-label="Application status">
+                <aside class="welcome-status" aria-label="Application status" data-i18n-aria-label="welcome.status">
                     <div>
-                        <span class="status-label">Backend</span>
-                        <span class="status-value">Local Python</span>
+                        <span class="status-label" data-i18n="common.backend">Backend</span>
+                        <span class="status-value" data-i18n="common.localPython">Local Python</span>
                     </div>
                     <div>
-                        <span class="status-label">Renderer</span>
-                        <span class="status-value">WebGL / Three.js</span>
+                        <span class="status-label" data-i18n="common.renderer">Renderer</span>
+                        <span class="status-value" data-i18n="welcome.rendererValue">WebGL / Three.js</span>
                     </div>
                     <div>
-                        <span class="status-label">Mode</span>
+                        <span class="status-label" data-i18n="common.mode">Mode</span>
                         <span class="status-value" data-status="integrator">Velocity Verlet</span>
                     </div>
                 </aside>
@@ -92,34 +223,143 @@
             <main id="settings-screen" class="screen settings-screen" data-screen="settings">
                 <header class="settings-header">
                     <div>
-                        <p class="settings-kicker">Runtime configuration</p>
-                        <h1>Settings</h1>
+                        <p class="settings-kicker" data-i18n="settings.kicker">Runtime configuration</p>
+                        <h1 data-i18n="settings.title">Settings</h1>
                     </div>
                     <button class="settings-back-button" type="button" data-route="welcome">
                         <span class="app-icon app-icon-arrow-left" aria-hidden="true"></span>
-                        <span>Back</span>
+                        <span data-i18n="common.back">Back</span>
                     </button>
                 </header>
 
-                <section class="settings-shell" aria-label="Application settings">
-                    <nav id="settings-category-nav" class="settings-category-nav" aria-label="Settings categories"></nav>
+                <section class="settings-shell" aria-label="Application settings" data-i18n-aria-label="settings.shell">
+                    <nav id="settings-category-nav" class="settings-category-nav" aria-label="Settings categories" data-i18n-aria-label="settings.categories"></nav>
                     <form id="settings-form" class="settings-form"></form>
                 </section>
             </main>
 
             <main id="simulation-screen" class="screen simulation-screen" data-screen="simulation">
-                <div id="simulation-viewport" class="simulation-viewport" aria-label="Simulation viewport"></div>
+                <div id="simulation-viewport" class="simulation-viewport" aria-label="Simulation viewport" data-i18n-aria-label="simulation.viewport"></div>
 
                 <header class="simulation-toolbar">
                     <button type="button" data-route="welcome">
                         <span class="app-icon app-icon-arrow-left" aria-hidden="true"></span>
-                        <span>Back</span>
+                        <span data-i18n="common.back">Back</span>
                     </button>
 
-                    <div class="simulation-readout" aria-live="polite">
-                        <span data-simulation-time>0.00 days</span>
+                    <div class="simulation-toolbar-right">
+                        <div class="simulation-readout" aria-live="polite">
+                            <span data-simulation-time>0.00 days</span>
+                        </div>
+
+                        <div class="orientation-gizmo" data-orientation-gizmo aria-label="Camera orientation" data-i18n-aria-label="simulation.orientationGizmo">
+                            <div class="orientation-gizmo-stage" data-orientation-gizmo-scene>
+                                <svg class="orientation-gizmo-lines" viewBox="0 0 92 92" aria-hidden="true" focusable="false">
+                                    <line class="orientation-line orientation-line-x" data-orientation-axis-line="x-positive" x1="46" y1="46" x2="46" y2="46"></line>
+                                    <line class="orientation-line orientation-line-y" data-orientation-axis-line="y-positive" x1="46" y1="46" x2="46" y2="46"></line>
+                                    <line class="orientation-line orientation-line-z" data-orientation-axis-line="z-positive" x1="46" y1="46" x2="46" y2="46"></line>
+                                </svg>
+
+                                <button type="button" class="orientation-axis orientation-axis-x is-positive" data-orientation-axis-point="x-positive" data-camera-view="right" aria-label="Right view" data-i18n-aria-label="simulation.viewRight" title="Right view" data-i18n-title="simulation.viewRight">X</button>
+                                <button type="button" class="orientation-axis orientation-axis-x is-negative" data-orientation-axis-point="x-negative" data-camera-view="left" aria-label="Left view" data-i18n-aria-label="simulation.viewLeft" title="Left view" data-i18n-title="simulation.viewLeft"></button>
+                                <button type="button" class="orientation-axis orientation-axis-y is-positive" data-orientation-axis-point="y-positive" data-camera-view="front" aria-label="Front view" data-i18n-aria-label="simulation.viewFront" title="Front view" data-i18n-title="simulation.viewFront">Y</button>
+                                <button type="button" class="orientation-axis orientation-axis-y is-negative" data-orientation-axis-point="y-negative" data-camera-view="back" aria-label="Back view" data-i18n-aria-label="simulation.viewBack" title="Back view" data-i18n-title="simulation.viewBack"></button>
+                                <button type="button" class="orientation-axis orientation-axis-z is-positive" data-orientation-axis-point="z-positive" data-camera-view="top" aria-label="Top view" data-i18n-aria-label="simulation.viewTop" title="Top view" data-i18n-title="simulation.viewTop">Z</button>
+                                <button type="button" class="orientation-axis orientation-axis-z is-negative" data-orientation-axis-point="z-negative" data-camera-view="bottom" aria-label="Bottom view" data-i18n-aria-label="simulation.viewBottom" title="Bottom view" data-i18n-title="simulation.viewBottom"></button>
+                            </div>
+                        </div>
                     </div>
                 </header>
+
+                <aside class="simulation-inspector" aria-label="Body inspector" data-i18n-aria-label="simulation.inspector">
+                    <div class="simulation-panel-header">
+                        <span data-i18n="simulation.body">Body</span>
+                        <select data-simulation-body-select aria-label="Select body" data-i18n-aria-label="simulation.selectBody"></select>
+                    </div>
+
+                    <dl class="body-stats">
+                        <div>
+                            <dt data-i18n="simulation.mass">Mass</dt>
+                            <dd data-body-stat="mass">--</dd>
+                        </div>
+                        <div>
+                            <dt data-i18n="simulation.radius">Radius</dt>
+                            <dd data-body-stat="radius">--</dd>
+                        </div>
+                        <div>
+                            <dt data-i18n="simulation.fromOrigin">From Origin</dt>
+                            <dd data-body-stat="distance">--</dd>
+                        </div>
+                        <div>
+                            <dt data-i18n="simulation.velocity">Velocity</dt>
+                            <dd data-body-stat="velocity">--</dd>
+                        </div>
+                    </dl>
+
+                    <div class="quick-controls" aria-label="Quick settings" data-i18n-aria-label="simulation.quickSettings">
+                        <button type="button" data-simulation-command="focus-selected" data-i18n="simulation.focus">Focus</button>
+                        <label>
+                            <input type="checkbox" data-simulation-toggle="labels" checked>
+                            <span data-i18n="simulation.labels">Labels</span>
+                        </label>
+                        <label>
+                            <input type="checkbox" data-simulation-toggle="orbits">
+                            <span data-i18n="simulation.orbits">Orbits</span>
+                        </label>
+                        <label>
+                            <input type="checkbox" data-simulation-toggle="track-selected">
+                            <span data-i18n="simulation.track">Track</span>
+                        </label>
+                    </div>
+
+                    <section class="body-facts" aria-label="Body facts" data-i18n-aria-label="simulation.facts">
+                        <h2 data-i18n="simulation.facts">Facts</h2>
+                        <ul data-body-facts>
+                            <li>--</li>
+                        </ul>
+                    </section>
+                </aside>
+
+                <section class="simulation-controls" aria-label="Simulation controls" data-i18n-aria-label="simulation.controls">
+                    <button type="button" class="simulation-control-button" data-simulation-command="toggle-playback" aria-pressed="false" data-i18n="simulation.pause">
+                        Pause
+                    </button>
+                    <button type="button" class="simulation-control-button" data-simulation-command="step-once">
+                        <span data-i18n="simulation.step">Step</span>
+                    </button>
+                    <button type="button" class="simulation-control-button" data-simulation-command="reset">
+                        <span data-i18n="simulation.reset">Reset</span>
+                    </button>
+
+                    <div class="simulation-speed-control" role="group" aria-label="Simulation speed" data-i18n-aria-label="simulation.speed">
+                        <button type="button" data-simulation-speed="1">1x</button>
+                        <button type="button" data-simulation-speed="4" class="is-active">4x</button>
+                        <button type="button" data-simulation-speed="16">16x</button>
+                        <button type="button" data-simulation-speed="64">64x</button>
+                    </div>
+
+                    <details class="camera-settings-menu" data-camera-menu>
+                        <summary>
+                            <span data-i18n="simulation.camera">Camera</span>
+                        </summary>
+                        <div class="camera-settings-popover">
+                            <label>
+                                <span data-i18n="simulation.cameraSpeed">Speed</span>
+                                <div class="camera-setting-control">
+                                    <input type="range" data-camera-setting="moveSpeed" aria-label="Camera movement speed" data-i18n-aria-label="simulation.cameraSpeed">
+                                    <output data-camera-setting-value="moveSpeed">135</output>
+                                </div>
+                            </label>
+                            <label>
+                                <span data-i18n="simulation.cameraSensitivity">Sensitivity</span>
+                                <div class="camera-setting-control">
+                                    <input type="range" data-camera-setting="mouseSensitivity" aria-label="Camera mouse sensitivity" data-i18n-aria-label="simulation.cameraSensitivity">
+                                    <output data-camera-setting-value="mouseSensitivity">1.0</output>
+                                </div>
+                            </label>
+                        </div>
+                    </details>
+                </section>
             </main>
         </div>
     </body>

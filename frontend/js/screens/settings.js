@@ -9,6 +9,7 @@ window.SolarSim.screens.initSettingsScreen = function initSettingsScreen({ root,
     const categoryNav = root.querySelector("#settings-category-nav");
     const form = root.querySelector("#settings-form");
     const routeButtons = root.querySelectorAll("[data-route]");
+    const backButton = root.querySelector(".settings-back-button");
     let activeCategory = "graphics";
 
     routeButtons.forEach((button) => {
@@ -17,11 +18,7 @@ window.SolarSim.screens.initSettingsScreen = function initSettingsScreen({ root,
         });
     });
 
-    renderCategoryNav(categoryNav, schema, activeCategory, (categoryKey) => {
-        activeCategory = categoryKey;
-        renderCategoryNav(categoryNav, schema, activeCategory, setActiveCategory);
-        showActiveSection(form, activeCategory);
-    });
+    renderCategoryNav(categoryNav, schema, activeCategory, setActiveCategory);
 
     renderSettingsForm(form, schema, store);
     showActiveSection(form, activeCategory);
@@ -44,6 +41,22 @@ window.SolarSim.screens.initSettingsScreen = function initSettingsScreen({ root,
         renderCategoryNav(categoryNav, schema, activeCategory, setActiveCategory);
         showActiveSection(form, activeCategory);
     }
+
+    window.addEventListener("solar-sim:language-changed", () => {
+        renderCategoryNav(categoryNav, schema, activeCategory, setActiveCategory);
+        renderSettingsForm(form, schema, store);
+        showActiveSection(form, activeCategory);
+    });
+
+    window.addEventListener("solar-sim:navigate", (event) => {
+        if (event.detail?.screenName !== "settings" || !backButton) {
+            return;
+        }
+
+        backButton.dataset.route = event.detail.previousScreen === "simulation"
+            ? "simulation"
+            : "welcome";
+    });
 };
 
 function renderCategoryNav(container, schema, activeCategory, onSelect) {
@@ -55,8 +68,8 @@ function renderCategoryNav(container, schema, activeCategory, onSelect) {
             button.classList.toggle("is-active", categoryKey === activeCategory);
             button.dataset.category = categoryKey;
             button.innerHTML = `
-                <span>${category.label}</span>
-                <span>${category.summary}</span>
+                <span>${translateCategory(categoryKey, category, "label")}</span>
+                <span>${translateCategory(categoryKey, category, "summary")}</span>
             `;
             button.addEventListener("click", () => onSelect(categoryKey));
             return button;
@@ -73,8 +86,8 @@ function renderSettingsForm(form, schema, store) {
         const header = document.createElement("div");
         header.className = "settings-section-header";
         header.innerHTML = `
-            <h2>${category.label}</h2>
-            <p>${category.description}</p>
+            <h2>${translateCategory(categoryKey, category, "label")}</h2>
+            <p>${translateCategory(categoryKey, category, "description")}</p>
         `;
 
         const grid = document.createElement("div");
@@ -113,16 +126,16 @@ function createControl(categoryKey, control, store) {
 
     title.className = "setting-label-row";
     label.className = "setting-title";
-    label.textContent = control.label;
+    label.textContent = translateControl(categoryKey, control, "label");
     owner.className = "setting-owner";
-    owner.textContent = control.owner;
+    owner.textContent = translateOwner(control.owner);
     title.append(label, owner);
     wrapper.append(title);
 
     if (control.description) {
         const description = document.createElement("p");
         description.className = "setting-description";
-        description.textContent = control.description;
+        description.textContent = translateControl(categoryKey, control, "description");
         wrapper.append(description);
     }
 
@@ -162,7 +175,7 @@ function createSegmentedControl(categoryKey, control, currentValue, store) {
     control.options.forEach((option) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = option.label;
+        button.textContent = translateOption(categoryKey, control, option);
         button.classList.toggle("is-selected", option.value === currentValue);
         button.addEventListener("click", () => {
             store.setValue(categoryKey, control.key, option.value);
@@ -181,13 +194,13 @@ function createBooleanControl(categoryKey, control, currentValue, store) {
 
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = currentValue ? "On" : "Off";
+    button.textContent = translateBooleanState(currentValue);
     button.setAttribute("aria-pressed", String(currentValue));
     button.addEventListener("click", () => {
         const nextValue = button.getAttribute("aria-pressed") !== "true";
         store.setValue(categoryKey, control.key, nextValue);
         button.setAttribute("aria-pressed", String(nextValue));
-        button.textContent = nextValue ? "On" : "Off";
+        button.textContent = translateBooleanState(nextValue);
     });
 
     row.append(button);
@@ -201,7 +214,7 @@ function createBooleanGroup(categoryKey, control, currentValue, store) {
     control.options.forEach((option) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = option.label;
+        button.textContent = translateOption(categoryKey, control, option);
         button.setAttribute("aria-pressed", String(Boolean(currentValue[option.value])));
         button.addEventListener("click", () => {
             const nextGroupValue = {
@@ -262,7 +275,7 @@ function createNumberControl(categoryKey, control, currentValue, store) {
 function createReadonlyControl(currentValue) {
     const value = document.createElement("div");
     value.className = "readonly-value";
-    value.textContent = currentValue;
+    value.textContent = translateReadonlyValue(currentValue);
     return value;
 }
 
@@ -276,4 +289,84 @@ function showActiveSection(form, categoryKey) {
     form.querySelectorAll("[data-category-section]").forEach((section) => {
         section.classList.toggle("is-active", section.dataset.categorySection === categoryKey);
     });
+}
+
+function translateCategory(categoryKey, category, fieldName) {
+    return translateByKeys([
+        category[`${fieldName}Key`],
+        `settings.category.${categoryKey}.${fieldName}`,
+    ], category[fieldName]);
+}
+
+function translateControl(categoryKey, control, fieldName) {
+    return translateByKeys([
+        control[`${fieldName}Key`],
+        `settings.${categoryKey}.${control.key}.${fieldName}`,
+    ], control[fieldName]);
+}
+
+function translateOption(categoryKey, control, option) {
+    return translateByKeys([
+        option.labelKey,
+        `settings.${categoryKey}.${control.key}.${option.value}`,
+        getSharedOptionKey(control.key, option.value),
+    ], option.label);
+}
+
+function getSharedOptionKey(controlKey, optionValue) {
+    if (controlKey === "renderQuality") {
+        return `settings.quality.${optionValue}`;
+    }
+
+    if (controlKey === "trailSystem") {
+        return `settings.trail.${optionValue}`;
+    }
+
+    if (controlKey === "language") {
+        return `settings.language.${optionValue}`;
+    }
+
+    if (controlKey === "uiToggles") {
+        return `settings.debug.${optionValue}`;
+    }
+
+    if (controlKey === "performanceOverlay") {
+        return `settings.debug.${optionValue}`;
+    }
+
+    return null;
+}
+
+function translateOwner(owner) {
+    return translateByKeys([`settings.owner.${owner}`], owner);
+}
+
+function translateBooleanState(value) {
+    return translateByKeys([value ? "common.on" : "common.off"], value ? "On" : "Off");
+}
+
+function translateReadonlyValue(value) {
+    if (value === "Backend controlled") {
+        return translateByKeys(["settings.simulation.fixedTimestep.value"], value);
+    }
+
+    return value;
+}
+
+function translateByKeys(keys, fallback) {
+    const i18n = window.SolarSim.i18n?.instance;
+
+    if (!i18n) {
+        return fallback || "";
+    }
+
+    for (const key of keys.filter(Boolean)) {
+        const translated = i18n.t(key);
+
+        if (translated !== key) {
+            return translated;
+        }
+    }
+
+    return fallback || "";
 }

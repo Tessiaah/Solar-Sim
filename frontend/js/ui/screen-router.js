@@ -5,6 +5,8 @@ window.SolarSim.ui.createScreenRouter = function createScreenRouter({ initialScr
     let currentScreen = initialScreen;
 
     function goTo(screenName) {
+        const previousScreen = currentScreen;
+
         currentScreen = screenName;
         document.querySelectorAll("[data-screen]").forEach((screen) => {
             screen.classList.toggle("screen-active", screen.dataset.screen === screenName);
@@ -12,7 +14,7 @@ window.SolarSim.ui.createScreenRouter = function createScreenRouter({ initialScr
 
         window.dispatchEvent(
             new CustomEvent("solar-sim:navigate", {
-                detail: { screenName },
+                detail: { screenName, previousScreen },
             }),
         );
     }
