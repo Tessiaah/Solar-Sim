@@ -65,6 +65,13 @@ Additional current scenario:
 - Planets start at distributed orbital phases so the initial view is not a single overlapping radial line.
 - The Sun receives an initial velocity calculated from the summed planetary momentum so it is not artificially fixed.
 
+Custom scenario support:
+- `create_scenario_body_catalog()` exposes the reusable planet catalog for the frontend scenario builder.
+- `create_custom_solar_system(planet_names, include_sun=True)` builds either a Sun plus the chosen planets, or a sunless selected-planet system.
+- Custom planet choices are submitted as stable body ids from the frontend, then translated back to canonical Python planet names in `src/simulation/scenario.py`.
+- When `include_sun` is true, the Sun is included as the central body and receives a momentum-balancing velocity based only on the selected planets.
+- When `include_sun` is false, Python reuses the selected planet definitions/materials but removes Sun-parent and orbit-guide metadata. It does not inherit the planets' original Sun-orbit velocities. Instead, it creates planet-only initial conditions: one selected body is placed at rest at the origin, two selected bodies are initialized as a barycentric binary, and larger selections are arranged as a compact barycentric multi-body system with tangential velocities based on the selected masses. This avoids pretending the planets orbit a missing Sun and prevents the system from simply flying forward due to inherited Solar System motion.
+
 Runtime orchestration lives in `src/simulation/runtime.py`.
 
 `SCENARIOS` is intentionally only a scenario registry:
@@ -82,6 +89,8 @@ SCENARIOS = {
 
 Do not put per-body colors, names, materials, or textures in `SCENARIOS`. Those belong on the body definitions created by the scenario factory.
 
+Runtime-created custom scenarios are stored in memory by `SimulationRuntime`, matching the current in-memory settings model. Each custom scenario stores a generated id, display name, selected body ids, whether the Sun is included, and a factory closure that recreates a fresh body list when the scenario is loaded or reset.
+
 ## Frontend
 
 Frontend entrypoint:
@@ -95,13 +104,15 @@ Main frontend areas:
 - `frontend/js/i18n/i18n.js`: translation service, DOM translation application, and language change events.
 - `frontend/js/ui/screen-router.js`: screen routing.
 - `frontend/js/screens/welcome.js`: welcome screen behavior.
+- `frontend/js/screens/scenarios.js`: scenario list and custom scenario creation screen.
 - `frontend/js/screens/settings.js`: settings UI.
 - `frontend/js/screens/simulation.js`: simulation screen startup/stop behavior and DOM bindings for playback, selected-body inspection, quick settings, and time controls.
 - `frontend/js/api/backend-api.js`: small JavaScript adapter around PyWebView API calls.
+- `frontend/js/utils/display-format.js`: shared frontend formatting and translation helpers for body names, scenario names, units, durations, facts, and vectors.
 - `frontend/js/rendering/simulation-renderer.js`: Three.js simulation scene and body mesh updates.
 - `frontend/js/rendering/materials.js`: material and texture creation.
 - `frontend/js/rendering/space-backdrop.js`: Three.js starfield background.
-- `frontend/js/rendering/fly-camera.js`: simulation camera movement, RMB pointer-lock mouse look, and scroll zoom.
+- `frontend/js/rendering/fly-camera.js`: simulation camera movement, RMB mouse look without browser Pointer Lock, and scroll zoom.
 
 CSS is under `frontend/css`.
 
@@ -119,6 +130,8 @@ Host/window methods:
 Simulation methods:
 
 - `list_scenarios()`
+- `list_scenario_bodies()`
+- `create_custom_scenario(config)`
 - `load_scenario(scenario_id="sun-earth")`
 - `step_simulation(steps=1)`
 - `get_simulation_snapshot()`
@@ -174,6 +187,19 @@ Static body metadata includes identity, physical constants needed for rendering 
         "centerM": [0.0, 0.0, 0.0],
     },
     "visual": {...},
+}
+```
+
+Scenario metadata also includes:
+
+```python
+{
+    "id": "custom-1",
+    "name": "Inner planets",
+    "description": "Custom system with Sun, Mercury, Venus, Earth, Mars.",
+    "custom": True,
+    "includeSun": True,
+    "selectedBodyIds": ["mercury", "venus", "earth", "mars"],
 }
 ```
 
@@ -241,6 +267,7 @@ Renderer material behavior:
 
 - If a body has a `map` texture, the material color defaults to white so the texture is not tinted by the fallback body color.
 - If a body has no `map`, the renderer uses the body color or `visual.baseColor`.
+- The sphere rendering setting can switch runtime materials between textured rendering, lit color-only rendering, and basic color rendering. This is renderer-owned and does not change Python body metadata.
 - `aoMap` is supported with duplicated sphere UVs through `uv2`.
 - Texture maps use repeated horizontal wrapping and linear mipmap filtering for cleaner sphere projection.
 - Texture objects are cached by texture type and URL while a scenario is active.
@@ -323,6 +350,22 @@ Current controls:
 
 The speed buttons do not change Python's fixed timestep or integrator. They only change the `steps` argument sent to the backend step API. Python still owns the timestep and advances physics with `SimulationRuntime.step(...)`.
 
+### Scenario Screen
+
+The main menu `Scenarios` button opens `frontend/js/screens/scenarios.js`.
+
+Current behavior:
+
+- Lists runnable scenarios from `list_scenarios()`, including built-in scenarios and runtime-created custom scenarios.
+- Loads the planet catalog from `list_scenario_bodies()` instead of hardcoding planet choices in JavaScript.
+- Lets the user choose a subset of planets and submit a custom scenario name.
+- Lets the user choose whether the custom system includes the Sun as the central body.
+- Calls `create_custom_scenario({ name, bodyIds, includeSun })`; Python validates the stable body ids, creates an in-memory scenario factory, loads that scenario, and returns the initial snapshot/metadata.
+- Dispatches `solar-sim:launch-scenario` with the requested scenario id before routing to the simulation screen.
+- The simulation screen consumes that event and calls `renderer.loadScenario(scenarioId)`, so the existing renderer lifecycle handles metadata replacement, mesh disposal/recreation, snapshot loading, and playback restart.
+
+The scenario screen does not construct body definitions, positions, velocities, masses, radii, textures, rings, facts, or orbit metadata. Those remain in Python scenario factories.
+
 ### Camera Controls
 
 The simulation viewport now has a frontend-owned fly camera.
@@ -359,8 +402,11 @@ Currently implemented runtime settings:
 
 - Interface language switches English/Portuguese text through the frontend i18n layer.
 - Window resolution and display mode are sent through the host-window API where PyWebView supports them.
+- Resolution presets include `1280x720`, `1920x1080`, and `2560x1440`.
 - FPS limit throttles the renderer frame loop.
-- Render quality changes sphere geometry detail and renderer pixel ratio.
+- Skybox detail controls how much Three.js backdrop content is created.
+- Sphere rendering controls planet material mode, sphere geometry detail, and renderer pixel ratio.
+- Lighting controls the simulation scene's primary point light, ambient fill, and rim light intensities.
 - Body trails are off by default and can be enabled through the debug UI toggles. The simulation trail system setting controls only the renderer-owned retention length.
 - Camera speed, mouse sensitivity, and min/max zoom distance affect the fly-camera controller.
 - Labels, orbit lines, velocity vectors, acceleration vectors, and the barycenter marker toggle renderer-owned Three.js objects.
@@ -378,6 +424,7 @@ The app supports English and Portuguese through a small frontend i18n layer. The
 - The runtime translation service lives in `frontend/js/i18n/i18n.js`.
 - Static HTML uses `data-i18n`, `data-i18n-aria-label`, and `data-i18n-title`.
 - Dynamic UI text, such as playback buttons, time readouts, body names, and body facts, calls the i18n service from the relevant screen or renderer module.
+- Shared dynamic formatting and translation helpers live in `frontend/js/utils/display-format.js`.
 - The language setting is defined in the `interface` category in `frontend/js/settings/settings-schema.js`.
 - Applying the interface setting dispatches `solar-sim:language-changed`; screens that render dynamic DOM should listen for that event and refresh their text.
 - Body labels in the Three.js scene are translated in the frontend from stable body ids, using keys such as `bodies.saturn.name`. Do not add localized planet names to Python scenario definitions; Python should expose canonical ids/metadata and the frontend chooses display text.
@@ -391,11 +438,12 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 - Avoid placing simulation logic in `HostWindowApi`.
 - Avoid sending static visual/material metadata on every simulation step.
 - Avoid duplicating body identity or visual data in `SCENARIOS`.
+- Avoid hardcoding planet catalogs in frontend screens. Use `list_scenario_bodies()` and stable body ids.
 - Keep camera behavior in frontend rendering code. Camera movement must not request or mutate backend physics state.
 - New Three.js object systems should provide a disposal path before they are attached to renderer lifecycle.
 - New visual systems should use the renderer's scene-position conversion helper rather than repeating meter-to-scene scaling and axis conversion.
 - Orbit guide lines should use static orbit metadata from Python. Do not derive guide-line radius or shape from changing runtime snapshots.
-- Keep playback controls separate from graphics quality. Render quality may change sphere detail and pixel ratio; simulation speed belongs to the simulation control bar and should not be hidden inside graphics presets.
+- Keep playback controls separate from graphics quality. Skybox, sphere, and lighting settings are visual-only; simulation speed belongs to the simulation control bar and should not be hidden inside graphics presets.
 - Avoid generic top-level helper names in frontend scripts. The app uses classic script tags, so shared names can collide across files.
 - Keep translatable UI copy in `frontend/js/i18n/translations.js`; body/scenario factories may choose fact keys, but they should not duplicate translated prose.
 
@@ -411,6 +459,7 @@ $files = @(
   "frontend\js\api\backend-api.js",
   "frontend\js\i18n\translations.js",
   "frontend\js\i18n\i18n.js",
+  "frontend\js\utils\display-format.js",
   "frontend\js\settings\settings-schema.js",
   "frontend\js\settings\settings-store.js",
   "frontend\js\settings\settings-effects.js",
@@ -420,6 +469,7 @@ $files = @(
   "frontend\js\rendering\fly-camera.js",
   "frontend\js\rendering\simulation-renderer.js",
   "frontend\js\screens\welcome.js",
+  "frontend\js\screens\scenarios.js",
   "frontend\js\screens\settings.js",
   "frontend\js\screens\simulation.js",
   "frontend\js\app.js"

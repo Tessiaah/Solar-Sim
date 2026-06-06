@@ -209,7 +209,7 @@ function createBooleanControl(categoryKey, control, currentValue, store) {
 
 function createBooleanGroup(categoryKey, control, currentValue, store) {
     const row = document.createElement("div");
-    row.className = "toggle-row";
+    row.className = "toggle-row toggle-grid";
 
     control.options.forEach((option) => {
         const button = document.createElement("button");
@@ -314,8 +314,12 @@ function translateOption(categoryKey, control, option) {
 }
 
 function getSharedOptionKey(controlKey, optionValue) {
-    if (controlKey === "renderQuality") {
+    if (controlKey === "skyboxQuality" || controlKey === "lightingQuality") {
         return `settings.quality.${optionValue}`;
+    }
+
+    if (controlKey === "sphereQuality") {
+        return `settings.sphereQuality.${optionValue}`;
     }
 
     if (controlKey === "trailSystem") {
@@ -346,10 +350,6 @@ function translateBooleanState(value) {
 }
 
 function translateReadonlyValue(value) {
-    if (value === "Backend controlled") {
-        return translateByKeys(["settings.simulation.fixedTimestep.value"], value);
-    }
-
     return value;
 }
 

@@ -1,6 +1,13 @@
 from src.data.constants import DAY_S
 from src.simulation.physics import compute_system_diagnostics, velocity_verlet
-from src.simulation.scenario import create_solar_system, create_sun_earth_system
+from src.simulation.ids import body_id_from_name
+from src.simulation.scenario import (
+    create_custom_solar_system,
+    create_scenario_body_catalog,
+    create_solar_system,
+    create_sun_earth_system,
+    get_planet_name_from_id,
+)
 
 
 SCENARIOS = {
@@ -23,11 +30,18 @@ class SimulationRuntime:
     def __init__(self) -> None:
         self._bodies = []
         self._scenario_id = None
+        self._custom_scenarios = {}
+        self._custom_scenario_counter = 0
         self._elapsed_s = 0.0
         self._dt_s = DAY_S / 24.0
         self.load_scenario("solar-system")
 
     def list_scenarios(self) -> dict:
+        scenarios = [
+            *SCENARIOS.values(),
+            *self._custom_scenarios.values(),
+        ]
+
         return {
             "ok": True,
             "scenarios": [
@@ -35,13 +49,64 @@ class SimulationRuntime:
                     "id": scenario["id"],
                     "name": scenario["name"],
                     "description": scenario["description"],
+                    "custom": bool(scenario.get("custom", False)),
+                    "includeSun": bool(scenario.get("includeSun", True)),
+                    "selectedBodyIds": list(scenario.get("selectedBodyIds", [])),
                 }
-                for scenario in SCENARIOS.values()
+                for scenario in scenarios
             ],
         }
 
+    def list_scenario_bodies(self) -> dict:
+        return {
+            "ok": True,
+            "bodies": [
+                serialize_body_metadata(body)
+                for body in create_scenario_body_catalog()
+            ],
+        }
+
+    def create_custom_scenario(self, config: dict | None = None) -> dict:
+        safe_config = config if isinstance(config, dict) else {}
+        selected_body_ids = normalize_body_ids(safe_config.get("bodyIds"))
+        selected_planet_names = tuple(
+            get_planet_name_from_id(body_id)
+            for body_id in selected_body_ids
+        )
+
+        if not selected_planet_names or any(name is None for name in selected_planet_names):
+            return {
+                "ok": False,
+                "reason": "Select at least one supported planet.",
+            }
+
+        self._custom_scenario_counter += 1
+        scenario_id = f"custom-{self._custom_scenario_counter}"
+        scenario_name = normalize_custom_scenario_name(
+            safe_config.get("name"),
+            self._custom_scenario_counter,
+        )
+        selected_names = tuple(name for name in selected_planet_names if name is not None)
+        selected_ids = [body_id_from_name(name) for name in selected_names]
+        include_sun = normalize_include_sun(safe_config.get("includeSun"))
+
+        self._custom_scenarios[scenario_id] = {
+            "id": scenario_id,
+            "name": scenario_name,
+            "description": build_custom_scenario_description(selected_names, include_sun),
+            "factory": (
+                lambda selected_names=selected_names, include_sun=include_sun:
+                    create_custom_solar_system(selected_names, include_sun)
+            ),
+            "custom": True,
+            "includeSun": include_sun,
+            "selectedBodyIds": selected_ids,
+        }
+
+        return self.load_scenario(scenario_id)
+
     def load_scenario(self, scenario_id: str = "sun-earth") -> dict:
-        scenario = SCENARIOS.get(scenario_id)
+        scenario = self._get_scenario(scenario_id)
 
         if scenario is None:
             return {"ok": False, "reason": f"Unknown scenario: {scenario_id}"}
@@ -84,14 +149,20 @@ class SimulationRuntime:
         }
 
     def get_scenario_metadata(self) -> dict:
-        scenario = SCENARIOS[self._scenario_id]
+        scenario = self._get_scenario(self._scenario_id)
 
         return {
             "id": scenario["id"],
             "name": scenario["name"],
             "description": scenario["description"],
+            "custom": bool(scenario.get("custom", False)),
+            "includeSun": bool(scenario.get("includeSun", True)),
+            "selectedBodyIds": list(scenario.get("selectedBodyIds", [])),
             "bodies": [serialize_body_metadata(body) for body in self._bodies],
         }
+
+    def _get_scenario(self, scenario_id: str) -> dict | None:
+        return SCENARIOS.get(scenario_id) or self._custom_scenarios.get(scenario_id)
 
 
 def serialize_body_metadata(body) -> dict:
@@ -209,5 +280,42 @@ def remove_none_values(values: dict) -> dict:
     }
 
 
-def body_id_from_name(name: str) -> str:
-    return name.lower().replace(" ", "-")
+def normalize_body_ids(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+
+    normalized_ids = []
+
+    for item in value:
+        if not isinstance(item, str):
+            continue
+
+        body_id = item.strip().lower()
+
+        if body_id and body_id not in normalized_ids:
+            normalized_ids.append(body_id)
+
+    return normalized_ids
+
+
+def normalize_custom_scenario_name(value, counter: int) -> str:
+    if isinstance(value, str):
+        normalized = " ".join(value.strip().split())
+
+        if normalized:
+            return normalized[:80]
+
+    return f"Custom System {counter}"
+
+
+def normalize_include_sun(value) -> bool:
+    return value is not False
+
+
+def build_custom_scenario_description(
+    planet_names: tuple[str, ...],
+    include_sun: bool,
+) -> str:
+    prefix = "Custom system with Sun, " if include_sun else "Sunless custom system with "
+
+    return prefix + ", ".join(planet_names) + "."

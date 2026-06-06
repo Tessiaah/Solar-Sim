@@ -8,12 +8,14 @@
         <link rel="stylesheet" href="./css/theme.css">
         <link rel="stylesheet" href="./css/layout.css">
         <link rel="stylesheet" href="./css/components/welcome.css">
+        <link rel="stylesheet" href="./css/components/scenarios.css">
         <link rel="stylesheet" href="./css/components/settings.css">
         <link rel="stylesheet" href="./css/components/simulation.css">
         <script defer src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
         <script defer src="./js/api/backend-api.js"></script>
         <script defer src="./js/i18n/translations.js"></script>
         <script defer src="./js/i18n/i18n.js"></script>
+        <script defer src="./js/utils/display-format.js"></script>
         <script defer src="./js/settings/settings-schema.js"></script>
         <script defer src="./js/settings/settings-store.js"></script>
         <script defer src="./js/settings/settings-effects.js"></script>
@@ -23,6 +25,7 @@
         <script defer src="./js/rendering/fly-camera.js"></script>
         <script defer src="./js/rendering/simulation-renderer.js"></script>
         <script defer src="./js/screens/welcome.js"></script>
+        <script defer src="./js/screens/scenarios.js"></script>
         <script defer src="./js/screens/settings.js"></script>
         <script defer src="./js/screens/simulation.js"></script>
         <script defer src="./js/app.js"></script>
@@ -56,8 +59,16 @@
                             <strong data-overlay-value="fpsLimit">--</strong>
                         </div>
                         <div class="metrics-row">
-                            <span data-i18n="overlay.quality">Quality</span>
-                            <strong data-overlay-value="renderQuality">--</strong>
+                            <span data-i18n="overlay.skyboxQuality">Skybox</span>
+                            <strong data-overlay-value="skyboxQuality">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.sphereQuality">Spheres</span>
+                            <strong data-overlay-value="sphereQuality">--</strong>
+                        </div>
+                        <div class="metrics-row">
+                            <span data-i18n="overlay.lightingQuality">Lighting</span>
+                            <strong data-overlay-value="lightingQuality">--</strong>
                         </div>
                         <div class="metrics-row">
                             <span data-i18n="overlay.pixelRatio">Pixel ratio</span>
@@ -218,6 +229,75 @@
                         <span class="status-value" data-status="integrator">Velocity Verlet</span>
                     </div>
                 </aside>
+            </main>
+
+            <main id="scenarios-screen" class="screen scenarios-screen" data-screen="scenarios">
+                <header class="scenarios-header">
+                    <div>
+                        <p class="scenarios-kicker" data-i18n="scenarios.kicker">Scenario workspace</p>
+                        <h1 data-i18n="scenarios.title">Scenarios</h1>
+                    </div>
+                    <button class="scenarios-back-button" type="button" data-route="welcome">
+                        <span class="app-icon app-icon-arrow-left" aria-hidden="true"></span>
+                        <span data-i18n="common.back">Back</span>
+                    </button>
+                </header>
+
+                <section class="scenarios-shell" aria-label="Scenario selection and creation" data-i18n-aria-label="scenarios.shell">
+                    <aside class="scenario-list-panel">
+                        <div class="scenario-section-header">
+                            <h2 data-i18n="scenarios.available">Available</h2>
+                        </div>
+                        <div class="scenario-list" data-scenario-list></div>
+                    </aside>
+
+                    <section class="scenario-builder-panel" aria-label="Custom scenario builder" data-i18n-aria-label="scenarios.builder">
+                        <div class="scenario-section-header">
+                            <h2 data-i18n="scenarios.customBuilder">Custom Scenario</h2>
+                        </div>
+
+                        <label class="scenario-name-field">
+                            <span data-i18n="scenarios.name">Name</span>
+                            <input type="text" data-custom-scenario-name maxlength="80" autocomplete="off" data-i18n-aria-label="scenarios.name" aria-label="Name">
+                        </label>
+
+                        <label class="scenario-mode-control">
+                            <input type="checkbox" data-custom-scenario-include-sun checked>
+                            <span data-i18n="scenarios.includeSun">Include Sun</span>
+                        </label>
+
+                        <div class="scenario-builder-actions">
+                            <button type="button" data-scenario-command="select-all" data-i18n="scenarios.selectAll">Select all</button>
+                            <button type="button" data-scenario-command="clear" data-i18n="scenarios.clear">Clear</button>
+                        </div>
+
+                        <div class="scenario-body-grid" data-scenario-body-grid></div>
+                    </section>
+
+                    <aside class="scenario-summary-panel">
+                        <div class="scenario-section-header">
+                            <h2 data-i18n="scenarios.selection">Selection</h2>
+                        </div>
+
+                        <dl class="scenario-summary">
+                            <div>
+                                <dt data-i18n="scenarios.centralBody">Central body</dt>
+                                <dd data-scenario-central-body>Sun</dd>
+                            </div>
+                            <div>
+                                <dt data-i18n="scenarios.selectedPlanets">Planets</dt>
+                                <dd data-scenario-selected-count>0</dd>
+                            </div>
+                        </dl>
+
+                        <button type="button" class="scenario-create-button" data-create-custom-scenario>
+                            <span data-i18n="scenarios.createAndStart">Create and Start</span>
+                            <span class="app-icon app-icon-arrow-right" aria-hidden="true"></span>
+                        </button>
+
+                        <p class="scenario-status" data-scenario-status aria-live="polite"></p>
+                    </aside>
+                </section>
             </main>
 
             <main id="settings-screen" class="screen settings-screen" data-screen="settings">

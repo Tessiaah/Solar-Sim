@@ -1,7 +1,7 @@
 window.SolarSim = window.SolarSim || {};
 window.SolarSim.rendering = window.SolarSim.rendering || {};
 
-window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMaterialFactory() {
+window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMaterialFactory({ store } = {}) {
     const textureLoader = typeof THREE !== "undefined" ? new THREE.TextureLoader() : null;
     const textureCache = new Map();
     const colorTextureTypes = new Set(["map", "emissiveMap"]);
@@ -40,16 +40,21 @@ window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMateria
 
     function resolveBodyVisual(body) {
         const visual = body.visual || {};
+        const sphereProfile = getSphereQualityProfile(store);
+        const materialMode = sphereProfile?.materialMode || "textured";
+        const preserveEmissiveBasic = visual.kind === "basic" && materialMode !== "basicColor";
 
         return {
-            kind: visual.kind || visualDefaults.kind,
+            kind: materialMode === "basicColor" && !preserveEmissiveBasic
+                ? "basic"
+                : visual.kind || visualDefaults.kind,
             color: visual.baseColor || body.color || visualDefaults.color,
             emissive: visual.emissive || visualDefaults.emissive,
             emissiveIntensity: visual.emissiveIntensity ?? visualDefaults.emissiveIntensity,
             roughness: visual.roughness ?? visualDefaults.roughness,
             metalness: visual.metalness ?? visualDefaults.metalness,
             clearcoat: visual.clearcoat ?? visualDefaults.clearcoat,
-            textures: normalizeTextures(visual),
+            textures: materialMode === "textured" ? normalizeTextures(visual) : {},
         };
     }
 
@@ -235,3 +240,10 @@ window.SolarSim.rendering.createBodyMaterialFactory = function createBodyMateria
         textureCache.clear();
     }
 };
+
+function getSphereQualityProfile(store) {
+    const sphereQuality = store?.getState?.()?.graphics?.sphereQuality || "textured";
+
+    return window.SolarSim.settings?.getControlProfile?.("graphics", "sphereQuality", sphereQuality)
+        || { materialMode: "textured", sphereGeometryDetail: 32 };
+}

@@ -33,6 +33,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
         selectedBodyId: null,
     };
     let simulationEntryToken = 0;
+    let requestedScenarioId = null;
 
     bindSimulationControls({ controls, renderer, store });
     bindCameraSettingsControls(controls.cameraSettings, store);
@@ -64,13 +65,20 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
         updatePlaybackControls(controls, state);
     });
 
+    window.addEventListener("solar-sim:launch-scenario", (event) => {
+        requestedScenarioId = event.detail?.scenarioId || null;
+    });
+
     window.addEventListener("solar-sim:navigate", (event) => {
         if (event.detail.screenName === "simulation") {
             const entryToken = simulationEntryToken + 1;
+            const scenarioIdToLoad = requestedScenarioId;
             const shouldResumeExistingScenario = event.detail.previousScreen === "settings"
-                && Boolean(uiState.latestSnapshot);
+                && Boolean(uiState.latestSnapshot)
+                && !scenarioIdToLoad;
 
             simulationEntryToken = entryToken;
+            requestedScenarioId = null;
             renderer.stop();
 
             if (shouldResumeExistingScenario) {
@@ -78,7 +86,11 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
                 return;
             }
 
-            renderer.resetScenario().finally(() => {
+            const scenarioRequest = scenarioIdToLoad
+                ? renderer.loadScenario(scenarioIdToLoad)
+                : renderer.resetScenario();
+
+            scenarioRequest.finally(() => {
                 if (entryToken !== simulationEntryToken) {
                     return;
                 }
@@ -518,7 +530,7 @@ function updateBodySelector(select, bodies, selectedBodyId) {
         const option = document.createElement("option");
 
         option.value = body.id;
-        option.textContent = translateBodyName(body);
+        option.textContent = window.SolarSim.format.bodyName(body);
         fragment.appendChild(option);
     });
 
@@ -530,8 +542,8 @@ function updateBodySelector(select, bodies, selectedBodyId) {
 function updatePlaybackControls(controls, state) {
     if (controls.togglePlaybackButton) {
         controls.togglePlaybackButton.textContent = state.paused
-            ? translateSimulationText("simulation.resume", {}, "Resume")
-            : translateSimulationText("simulation.pause", {}, "Pause");
+            ? window.SolarSim.format.text("simulation.resume", {}, "Resume")
+            : window.SolarSim.format.text("simulation.pause", {}, "Pause");
         controls.togglePlaybackButton.setAttribute("aria-pressed", String(state.paused));
     }
 
@@ -554,10 +566,10 @@ function updateSelectedBodyStats(stats, uiState) {
         ? uiState.latestSnapshot?.bodies?.find((body) => body.id === selectedBodyId)
         : null;
 
-    setStat(stats.mass, metadata ? formatMass(metadata.massKg) : "--");
-    setStat(stats.radius, metadata ? formatDistance(metadata.radiusM) : "--");
-    setStat(stats.distance, snapshotBody ? formatDistance(vectorMagnitude(snapshotBody.positionM)) : "--");
-    setStat(stats.velocity, snapshotBody ? formatVelocity(vectorMagnitude(snapshotBody.velocityMS)) : "--");
+    setStat(stats.mass, metadata ? window.SolarSim.format.mass(metadata.massKg) : "--");
+    setStat(stats.radius, metadata ? window.SolarSim.format.distance(metadata.radiusM) : "--");
+    setStat(stats.distance, snapshotBody ? window.SolarSim.format.distance(window.SolarSim.format.vectorMagnitude(snapshotBody.positionM)) : "--");
+    setStat(stats.velocity, snapshotBody ? window.SolarSim.format.velocity(window.SolarSim.format.vectorMagnitude(snapshotBody.velocityMS)) : "--");
     updateSelectedBodyFacts(stats.factsList, metadata, snapshotBody, uiState.latestSnapshot);
 }
 
@@ -565,36 +577,6 @@ function setStat(element, value) {
     if (element) {
         element.textContent = value;
     }
-}
-
-function formatMass(valueKg) {
-    if (!Number.isFinite(valueKg)) {
-        return "--";
-    }
-
-    return `${valueKg.toExponential(3)} kg`;
-}
-
-function formatDistance(valueM) {
-    if (!Number.isFinite(valueM)) {
-        return "--";
-    }
-
-    const auM = 149_597_870_700;
-
-    if (Math.abs(valueM) >= auM * 0.08) {
-        return `${(valueM / auM).toFixed(3)} AU`;
-    }
-
-    return `${formatCompactNumber(valueM / 1000)} km`;
-}
-
-function formatVelocity(valueMS) {
-    if (!Number.isFinite(valueMS)) {
-        return "--";
-    }
-
-    return `${(valueMS / 1000).toFixed(2)} km/s`;
 }
 
 function updateSelectedBodyFacts(list, metadata, snapshotBody, snapshot) {
@@ -630,40 +612,40 @@ function createBodyFacts(metadata, snapshotBody, snapshot) {
     const facts = Array.isArray(metadata.facts)
         ? metadata.facts
             .filter((fact) => typeof fact === "string" && fact.trim().length > 0)
-            .map(translateMetadataFact)
+            .map(window.SolarSim.format.metadataFact)
         : [];
     const textureCount = Object.values(metadata.visual?.textures || {}).filter(Boolean).length;
 
     if (metadata.parent) {
-        facts.push(translateSimulationText("simulation.fact.parent", {
-            parent: translateBodyName({
-                id: metadata.parentId || bodyIdFromBodyName(metadata.parent),
+        facts.push(window.SolarSim.format.text("simulation.fact.parent", {
+            parent: window.SolarSim.format.bodyName({
+                id: metadata.parentId || window.SolarSim.format.bodyIdFromBodyName(metadata.parent),
                 name: metadata.parent,
             }),
         }, `Parent body: ${metadata.parent}.`));
     }
 
     facts.push(metadata.isFixed
-        ? translateSimulationText("simulation.fact.fixed", {}, "Fixed in the current backend scenario.")
-        : translateSimulationText("simulation.fact.integrated", {}, "Integrated by the backend physics step."));
+        ? window.SolarSim.format.text("simulation.fact.fixed", {}, "Fixed in the current backend scenario.")
+        : window.SolarSim.format.text("simulation.fact.integrated", {}, "Integrated by the backend physics step."));
 
     if (textureCount > 0) {
-        facts.push(translateSimulationText("simulation.fact.textureCount", {
+        facts.push(window.SolarSim.format.text("simulation.fact.textureCount", {
             count: textureCount,
             plural: textureCount === 1 ? "" : "s",
         }, `Uses ${textureCount} renderer texture map${textureCount === 1 ? "" : "s"}.`));
     }
 
     if (snapshotBody) {
-        const speed = formatVelocity(vectorMagnitude(snapshotBody.velocityMS));
+        const speed = window.SolarSim.format.velocity(window.SolarSim.format.vectorMagnitude(snapshotBody.velocityMS));
 
-        facts.push(translateSimulationText("simulation.fact.currentSpeed", { speed }, `Current speed is ${speed}.`));
+        facts.push(window.SolarSim.format.text("simulation.fact.currentSpeed", { speed }, `Current speed is ${speed}.`));
     }
 
     if (snapshot?.dtS) {
-        const duration = formatDuration(snapshot.dtS);
+        const duration = window.SolarSim.format.duration(snapshot.dtS);
 
-        facts.push(translateSimulationText(
+        facts.push(window.SolarSim.format.text(
             "simulation.fact.timestep",
             { duration },
             `Backend timestep is ${duration} per integration step.`,
@@ -671,81 +653,4 @@ function createBodyFacts(metadata, snapshotBody, snapshot) {
     }
 
     return facts.slice(0, 6);
-}
-
-function formatDuration(valueS) {
-    if (!Number.isFinite(valueS)) {
-        return "--";
-    }
-
-    if (valueS >= 3600) {
-        const value = formatCompactNumber(valueS / 3600);
-
-        return translateSimulationText("common.hoursShort", { value }, `${value} h`);
-    }
-
-    if (valueS >= 60) {
-        const value = formatCompactNumber(valueS / 60);
-
-        return translateSimulationText("common.minutesShort", { value }, `${value} min`);
-    }
-
-    const value = formatCompactNumber(valueS);
-
-    return translateSimulationText("common.secondsShort", { value }, `${value} s`);
-}
-
-function vectorMagnitude(values) {
-    if (!Array.isArray(values) || values.length < 3) {
-        return NaN;
-    }
-
-    return Math.hypot(values[0], values[1], values[2]);
-}
-
-function formatCompactNumber(value) {
-    return new Intl.NumberFormat(getSimulationNumberLocale(), {
-        maximumFractionDigits: value >= 1000 ? 0 : 2,
-    }).format(value);
-}
-
-function translateMetadataFact(fact) {
-    return translateSimulationText(fact, {}, fact);
-}
-
-function translateBodyName(body) {
-    if (!body) {
-        return "";
-    }
-
-    const bodyId = body.id || bodyIdFromBodyName(body.name);
-    const fallback = body.name || body.id || "";
-
-    return bodyId
-        ? translateSimulationText(`bodies.${bodyId}.name`, {}, fallback)
-        : fallback;
-}
-
-function bodyIdFromBodyName(name) {
-    return typeof name === "string"
-        ? name.toLowerCase().replace(/\s+/g, "-")
-        : null;
-}
-
-function translateSimulationText(key, values = {}, fallback = key) {
-    const i18n = window.SolarSim.i18n?.instance;
-
-    if (!i18n) {
-        return fallback;
-    }
-
-    const translated = i18n.t(key, values);
-
-    return translated === key ? fallback : translated;
-}
-
-function getSimulationNumberLocale() {
-    const language = window.SolarSim.i18n?.instance?.getLanguage?.();
-
-    return language === "pt" ? "pt-PT" : "en-US";
 }

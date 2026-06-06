@@ -1,7 +1,10 @@
+from dataclasses import replace
+
 import numpy as np
 
 from src.data.constants import *
 from src.simulation.body import BodyOrbit, BodyRing, BodyRingBand, BodyState, BodyVisual, CelestialBody, SimBody
+from src.simulation.ids import body_id_from_name
 
 
 TEXTURE_BASE_PATH = "./assets/textures/planets"
@@ -147,6 +150,11 @@ PLANET_INITIAL_PHASES_RAD = {
     "Neptune": np.deg2rad(260.0),
 }
 
+PLANET_NAMES_BY_ID = {
+    body_id_from_name(name): name
+    for name in PLANET_ORDER
+}
+
 SATURN_RINGS = (
     BodyRing(
         inner_radius_m=66_900_000.0,
@@ -218,6 +226,86 @@ def create_solar_system() -> list[SimBody]:
         create_sun(sun_velocity),
         *planets,
     ]
+
+
+def create_custom_solar_system(
+    planet_names: tuple[str, ...],
+    include_sun: bool = True,
+) -> list[SimBody]:
+    planets = create_planets_for_names(planet_names)
+
+    if not include_sun:
+        return create_sunless_planet_system(planets)
+
+    sun_velocity = calculate_momentum_balancing_sun_velocity(planets)
+
+    return [
+        create_sun(sun_velocity),
+        *planets,
+    ]
+
+
+def create_planets_for_names(planet_names: tuple[str, ...]) -> list[SimBody]:
+    return [
+        create_planet(name, PLANET_INITIAL_PHASES_RAD[name])
+        for name in planet_names
+    ]
+
+
+def create_sunless_planet_system(planets: list[SimBody]) -> list[SimBody]:
+    sunless_planets = [
+        remove_solar_parent_metadata(planet)
+        for planet in planets
+    ]
+
+    return recenter_system_to_barycentric_frame(sunless_planets)
+
+
+def remove_solar_parent_metadata(body: SimBody) -> SimBody:
+    return SimBody(
+        definition=replace(
+            body.definition,
+            parent=None,
+            orbit=None,
+        ),
+        state=BodyState(
+            position_m=body.state.position_m.copy(),
+            velocity_ms=body.state.velocity_ms.copy(),
+        ),
+    )
+
+
+def recenter_system_to_barycentric_frame(bodies: list[SimBody]) -> list[SimBody]:
+    total_mass_kg = sum(body.definition.mass_kg for body in bodies)
+
+    if total_mass_kg <= 0.0:
+        return bodies
+
+    barycenter_m = sum(
+        body.state.position_m * body.definition.mass_kg
+        for body in bodies
+    ) / total_mass_kg
+    bulk_velocity_ms = sum(
+        body.state.velocity_ms * body.definition.mass_kg
+        for body in bodies
+    ) / total_mass_kg
+
+    for body in bodies:
+        body.state.position_m = body.state.position_m - barycenter_m
+        body.state.velocity_ms = body.state.velocity_ms - bulk_velocity_ms
+
+    return bodies
+
+
+def create_scenario_body_catalog() -> list[SimBody]:
+    return [
+        create_planet(name, PLANET_INITIAL_PHASES_RAD[name])
+        for name in PLANET_ORDER
+    ]
+
+
+def get_planet_name_from_id(body_id: str) -> str | None:
+    return PLANET_NAMES_BY_ID.get(body_id)
 
 
 def create_sun(velocity_ms: np.ndarray) -> SimBody:

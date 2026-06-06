@@ -180,12 +180,14 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
+    align-items: stretch;
 }
 
 .setting-control {
     display: grid;
+    align-content: start;
     gap: 12px;
-    min-height: 122px;
+    min-height: 132px;
     margin: 0;
     padding: 16px;
     border: 1px solid var(--color-line);
@@ -232,13 +234,16 @@
 }
 
 .segmented-control {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
     gap: 8px;
 }
 
 .segmented-control button,
 .toggle-row button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 38px;
     padding: 0 12px;
     border: 1px solid var(--color-line);
@@ -248,6 +253,8 @@
     cursor: pointer;
     font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
     font-weight: 800;
+    line-height: 1.1;
+    text-align: center;
 }
 
 .segmented-control button.is-selected,
@@ -261,6 +268,24 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+.toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.toggle-grid button {
+    width: 100%;
+    min-height: 42px;
+}
+
+[data-category-section="debug"] .settings-grid {
+    grid-template-columns: 1fr;
+}
+
+[data-category-section="debug"] .setting-control {
+    min-height: 0;
 }
 
 .range-row,

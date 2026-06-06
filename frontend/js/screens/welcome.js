@@ -60,7 +60,7 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
     const state = {
         frameIntervalMs: getFrameInterval(initialGraphicsSettings),
         lastFrameTime: 0,
-        renderQuality: initialGraphicsSettings?.renderQuality || "medium",
+        renderQuality: getWelcomeBackdropQuality(initialGraphicsSettings),
         imageSmoothingEnabled: true,
         visualEffects: createWelcomeVisualEffectsDefaults(),
         width: 0,
@@ -111,7 +111,7 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
     return {
         applySettings(graphicsSettings) {
             state.frameIntervalMs = getFrameInterval(graphicsSettings);
-            state.renderQuality = graphicsSettings.renderQuality;
+            state.renderQuality = getWelcomeBackdropQuality(graphicsSettings);
             resize();
         },
     };
@@ -129,7 +129,7 @@ function createParticles(width, height, renderQuality) {
     const qualityMultipliers = {
         low: 0.58,
         medium: 1,
-        high: 1.45,
+        full: 1.45,
     };
     const multiplier = qualityMultipliers[renderQuality] || qualityMultipliers.medium;
     const count = Math.round(Math.min(Math.max(width / 3.6, 220), 620) * multiplier);
@@ -249,7 +249,7 @@ function getPixelRatioForQuality(renderQuality) {
         return 1;
     }
 
-    if (renderQuality === "high") {
+    if (renderQuality === "full") {
         return Math.min(window.devicePixelRatio || 1, 2.5);
     }
 
@@ -261,9 +261,15 @@ function getOrbitCountForQuality(renderQuality) {
         return 5;
     }
 
-    if (renderQuality === "high") {
+    if (renderQuality === "full") {
         return 10;
     }
 
     return 8;
+}
+
+function getWelcomeBackdropQuality(graphicsSettings) {
+    return graphicsSettings?.skyboxQuality
+        || (graphicsSettings?.renderQuality === "high" ? "full" : graphicsSettings?.renderQuality)
+        || "full";
 }

@@ -54,16 +54,28 @@ function createRuntimeSettingsController({ schema, store }) {
         return store.getState();
     }
 
-    function getRenderQualityProfile() {
+    function getSphereQualityProfile() {
         const state = store.getState();
-        const control = schema.graphics.controls.find((item) => item.key === "renderQuality");
-        return control.mapsTo[state.graphics.renderQuality];
+        return getControlProfile("graphics", "sphereQuality", state.graphics.sphereQuality);
+    }
+
+    function getSkyboxQualityProfile() {
+        const state = store.getState();
+        return getControlProfile("graphics", "skyboxQuality", state.graphics.skyboxQuality);
+    }
+
+    function getLightingQualityProfile() {
+        const state = store.getState();
+        return getControlProfile("graphics", "lightingQuality", state.graphics.lightingQuality);
     }
 
     return {
         applyAll,
         applyChange,
-        getRenderQualityProfile,
+        getLightingQualityProfile,
+        getRenderQualityProfile: getSphereQualityProfile,
+        getSkyboxQualityProfile,
+        getSphereQualityProfile,
         getState,
     };
 }
@@ -81,17 +93,25 @@ function createGraphicsAdapter(schema) {
 
     return {
         apply(graphics, changedSetting) {
-            const renderQualityProfile = getRenderQualityProfile(schema, graphics.renderQuality);
+            const skyboxQualityProfile = getControlProfile("graphics", "skyboxQuality", graphics.skyboxQuality);
+            const sphereQualityProfile = getControlProfile("graphics", "sphereQuality", graphics.sphereQuality);
+            const lightingQualityProfile = getControlProfile("graphics", "lightingQuality", graphics.lightingQuality);
 
             document.documentElement.dataset.resolution = graphics.resolution;
             document.documentElement.dataset.displayMode = graphics.displayMode;
-            document.documentElement.dataset.renderQuality = graphics.renderQuality;
+            document.documentElement.dataset.skyboxQuality = graphics.skyboxQuality;
+            document.documentElement.dataset.sphereQuality = graphics.sphereQuality;
+            document.documentElement.dataset.lightingQuality = graphics.lightingQuality;
 
             window.dispatchEvent(
                 new CustomEvent("solar-sim:graphics-settings-applied", {
                     detail: {
+                        changedSetting,
                         graphics,
-                        renderQualityProfile,
+                        lightingQualityProfile,
+                        renderQualityProfile: sphereQualityProfile,
+                        skyboxQualityProfile,
+                        sphereQualityProfile,
                     },
                 }),
             );
@@ -424,11 +444,13 @@ function createSettingsMetricsDrawerController({ schema, store }) {
     }
 
     function updateSettingsMetrics(state = store.getState()) {
-        const renderQualityProfile = getRenderQualityProfile(schema, state.graphics.renderQuality);
+        const sphereQualityProfile = getControlProfile("graphics", "sphereQuality", state.graphics.sphereQuality);
 
         metricsSetValue(values, "fpsLimit", state.graphics.fpsLimit);
-        metricsSetValue(values, "renderQuality", metricsTranslateCurrentOption(schema, "graphics", "renderQuality", state.graphics.renderQuality));
-        metricsSetValue(values, "sphereGeometryDetail", renderQualityProfile?.sphereGeometryDetail ?? "--");
+        metricsSetValue(values, "skyboxQuality", metricsTranslateCurrentOption(schema, "graphics", "skyboxQuality", state.graphics.skyboxQuality));
+        metricsSetValue(values, "sphereQuality", metricsTranslateCurrentOption(schema, "graphics", "sphereQuality", state.graphics.sphereQuality));
+        metricsSetValue(values, "lightingQuality", metricsTranslateCurrentOption(schema, "graphics", "lightingQuality", state.graphics.lightingQuality));
+        metricsSetValue(values, "sphereGeometryDetail", sphereQualityProfile?.sphereGeometryDetail ?? "--");
         metricsSetValue(values, "cameraSpeed", state.camera.moveSpeed);
         metricsSetValue(values, "cameraSensitivity", Number(state.camera.mouseSensitivity).toFixed(1));
     }
@@ -815,9 +837,8 @@ function clampMetricsNumber(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
 
-function getRenderQualityProfile(schema, renderQuality) {
-    const control = schema.graphics.controls.find((item) => item.key === "renderQuality");
-    return control.mapsTo[renderQuality];
+function getControlProfile(categoryKey, settingKey, value) {
+    return window.SolarSim.settings?.getControlProfile?.(categoryKey, settingKey, value) || null;
 }
 
 function translateSettingOption(categoryKey, control, option) {

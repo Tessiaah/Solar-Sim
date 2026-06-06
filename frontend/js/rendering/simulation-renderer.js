@@ -11,7 +11,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     const perspectiveCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
     const orthographicCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10000);
     let camera = perspectiveCamera;
-    const materialFactory = window.SolarSim.rendering.createBodyMaterialFactory();
+    const materialFactory = window.SolarSim.rendering.createBodyMaterialFactory({ store });
     const bodyMeshes = new Map();
     const bodyRingMeshes = new Map();
     const bodyLabels = new Map();
@@ -25,7 +25,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     const scale = createDisplayScale();
     const clock = new THREE.Clock();
     const bodyMetadata = new Map();
-    const sceneObjects = setupScene(scene, perspectiveCamera);
+    const sceneObjects = setupScene(scene, perspectiveCamera, store);
     const selectionMarker = createSelectionMarker();
     const barycenterMarker = createBarycenterMarker();
     orthographicCamera.position.copy(perspectiveCamera.position);
@@ -77,6 +77,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     let lastTrailElapsedS = null;
     let lastStepDurationMs = null;
     let lastStepCount = 0;
+    let currentMaterialMode = getSphereQualityProfile(store)?.materialMode || "textured";
     const readoutAnimationDurationMs = 160;
 
     scene.add(selectionMarker);
@@ -745,9 +746,25 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     }
 
     function applyGraphicsSettings(event) {
-        const profile = event.detail.renderQualityProfile;
+        const sphereProfile = event.detail.sphereQualityProfile || event.detail.renderQualityProfile;
+        const skyboxProfile = event.detail.skyboxQualityProfile;
+        const lightingProfile = event.detail.lightingQualityProfile;
+        const changedSetting = event.detail.changedSetting;
 
-        updateBodyGeometryDetail(profile?.sphereGeometryDetail);
+        updateBodyGeometryDetail(sphereProfile?.sphereGeometryDetail);
+
+        if (!changedSetting || changedSetting === "sphereQuality") {
+            updateBodyMaterials(sphereProfile);
+        }
+
+        if (!changedSetting || changedSetting === "skyboxQuality") {
+            sceneObjects.backdrop.applyQuality?.(skyboxProfile?.backdropDetail || "full");
+        }
+
+        if (!changedSetting || changedSetting === "lightingQuality") {
+            applyLightingProfile(sceneObjects, lightingProfile);
+        }
+
         resize();
     }
 
@@ -835,7 +852,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     };
 
     function getSphereGeometryDetail() {
-        const profile = window.SolarSim.settings?.runtime?.getRenderQualityProfile?.();
+        const profile = getSphereQualityProfile(store);
         return profile?.sphereGeometryDetail || 32;
     }
 
@@ -852,6 +869,33 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
             mesh.geometry.dispose();
             mesh.geometry = createSphereGeometry(radius, nextDetail);
         });
+    }
+
+    function updateBodyMaterials(sphereProfile) {
+        const materialMode = sphereProfile?.materialMode || "textured";
+
+        if (!hasSnapshot || materialMode === currentMaterialMode) {
+            currentMaterialMode = materialMode;
+            return;
+        }
+
+        currentMaterialMode = materialMode;
+        bodyMeshes.forEach((mesh, bodyId) => {
+            const metadata = getBodyMetadata(bodyId);
+
+            if (!metadata) {
+                return;
+            }
+
+            const previousMaterial = mesh.material;
+
+            mesh.material = materialFactory.createMaterial(metadata);
+            disposeMaterial(previousMaterial);
+        });
+
+        if (materialMode !== "textured") {
+            materialFactory.dispose();
+        }
     }
 
     async function ensureScenarioMetadata(requestStateToken = simulationStateToken) {
@@ -1346,12 +1390,17 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     }
 
     function emitRendererMetrics() {
+        const state = store?.getState?.();
+
         window.dispatchEvent(
             new CustomEvent("solar-sim:renderer-metrics", {
                 detail: {
-                    fpsLimit: store?.getState()?.graphics?.fpsLimit || "60",
+                    fpsLimit: state?.graphics?.fpsLimit || "60",
                     pixelRatio: renderer.getPixelRatio(),
                     sphereGeometryDetail: currentGeometryDetail,
+                    skyboxQuality: state?.graphics?.skyboxQuality || "full",
+                    sphereQuality: state?.graphics?.sphereQuality || "textured",
+                    lightingQuality: state?.graphics?.lightingQuality || "medium",
                     trailSystem,
                     trailsVisible,
                     trailPointCount: getTrailPointCount(),
@@ -1459,26 +1508,47 @@ function nudgeVerticalFlyCameraPose(camera, target) {
     }
 }
 
-function setupScene(scene, camera) {
+function setupScene(scene, camera, store) {
     camera.position.set(0, 88, 245);
     camera.lookAt(0, 0, 0);
 
-    const sunLight = new THREE.PointLight(0xffffff, 2.8, 0, 1);
+    const lightingProfile = getLightingQualityProfile(store);
+    const sunLight = new THREE.PointLight(0xffffff, lightingProfile.primaryIntensity, 0, 1);
     sunLight.position.set(0, 0, 0);
+    const fillLight = createGlobalFillLight(lightingProfile);
+    const rimLight = createRimLight(lightingProfile);
 
     scene.background = new THREE.Color("#02040a");
-    const backdrop = window.SolarSim.rendering.addSpaceBackdrop(scene);
+    const backdrop = window.SolarSim.rendering.addSpaceBackdrop(scene, getSkyboxQualityProfile(store)?.backdropDetail || "full");
     scene.add(sunLight);
-    scene.add(createGlobalFillLight());
+    scene.add(fillLight);
+    scene.add(rimLight);
 
     return {
         backdrop,
+        fillLight,
         primaryLight: sunLight,
+        rimLight,
     };
 }
 
-function createGlobalFillLight() {
-    return new THREE.AmbientLight(0xd8e2f0, 0.82);
+function createGlobalFillLight(lightingProfile) {
+    return new THREE.AmbientLight(0xd8e2f0, lightingProfile.ambientIntensity);
+}
+
+function createRimLight(lightingProfile) {
+    const light = new THREE.DirectionalLight(0x9db8ff, lightingProfile.rimIntensity);
+
+    light.position.set(-0.8, 0.55, -0.45).normalize();
+    return light;
+}
+
+function applyLightingProfile(sceneObjects, lightingProfile) {
+    const profile = lightingProfile || getDefaultLightingQualityProfile();
+
+    sceneObjects.primaryLight.intensity = profile.primaryIntensity;
+    sceneObjects.fillLight.intensity = profile.ambientIntensity;
+    sceneObjects.rimLight.intensity = profile.rimIntensity;
 }
 
 function createBodyMesh(body, materialFactory, scale, geometryDetail) {
@@ -2206,16 +2276,45 @@ function clampNumber(value, min, max) {
 }
 
 function getPixelRatio(store) {
-    const quality = store?.getState()?.graphics?.renderQuality || "medium";
+    const sphereQuality = store?.getState?.()?.graphics?.sphereQuality || "textured";
 
-    if (quality === "low") {
+    if (sphereQuality === "noTexture") {
         return 1;
     }
 
-    if (quality === "high") {
-        return Math.min(window.devicePixelRatio || 1, 2.5);
+    if (sphereQuality === "basicColor") {
+        return Math.min(window.devicePixelRatio || 1, 1.5);
     }
 
     return Math.min(window.devicePixelRatio || 1, 2);
+}
+
+function getSkyboxQualityProfile(store) {
+    const value = store?.getState?.()?.graphics?.skyboxQuality || "full";
+
+    return window.SolarSim.settings?.getControlProfile?.("graphics", "skyboxQuality", value)
+        || { backdropDetail: "full" };
+}
+
+function getSphereQualityProfile(store) {
+    const value = store?.getState?.()?.graphics?.sphereQuality || "textured";
+
+    return window.SolarSim.settings?.getControlProfile?.("graphics", "sphereQuality", value)
+        || { materialMode: "textured", sphereGeometryDetail: 32 };
+}
+
+function getLightingQualityProfile(store) {
+    const value = store?.getState?.()?.graphics?.lightingQuality || "medium";
+
+    return window.SolarSim.settings?.getControlProfile?.("graphics", "lightingQuality", value)
+        || getDefaultLightingQualityProfile();
+}
+
+function getDefaultLightingQualityProfile() {
+    return {
+        ambientIntensity: 0.82,
+        primaryIntensity: 2.8,
+        rimIntensity: 0.18,
+    };
 }
 })();

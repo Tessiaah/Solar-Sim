@@ -2,12 +2,26 @@ window.SolarSim = window.SolarSim || {};
 window.SolarSim.rendering = window.SolarSim.rendering || {};
 
 (function initializeSpaceBackdropModule() {
-window.SolarSim.rendering.addSpaceBackdrop = function addSpaceBackdrop(scene) {
-    const backdrop = createBackdrop();
+window.SolarSim.rendering.addSpaceBackdrop = function addSpaceBackdrop(scene, initialQuality = "full") {
+    let backdrop = createBackdrop(initialQuality);
+    let currentQuality = normalizeBackdropQuality(initialQuality);
 
     scene.add(backdrop.group);
 
     return {
+        applyQuality(nextQuality) {
+            const safeQuality = normalizeBackdropQuality(nextQuality);
+
+            if (safeQuality === currentQuality) {
+                return;
+            }
+
+            scene.remove(backdrop.group);
+            disposeBackdrop(backdrop);
+            backdrop = createBackdrop(safeQuality);
+            currentQuality = safeQuality;
+            scene.add(backdrop.group);
+        },
         dispose() {
             scene.remove(backdrop.group);
             disposeBackdrop(backdrop);
@@ -139,7 +153,43 @@ const DUST_WISP_CONFIGS = [
 
 const ZERO_ROTATION = { x: 0, y: 0, z: 0 };
 
-function createBackdrop() {
+const BACKDROP_QUALITY_PROFILES = {
+    low: {
+        starLayerCount: 1,
+        starCountScale: 0.42,
+        dustBand: false,
+        nebula: false,
+        galaxies: false,
+        clusters: false,
+        wisps: false,
+        glowStars: false,
+    },
+    medium: {
+        starLayerCount: 2,
+        starCountScale: 0.68,
+        dustBand: true,
+        nebula: true,
+        galaxies: false,
+        clusters: true,
+        wisps: false,
+        glowStars: true,
+        glowStarScale: 0.56,
+    },
+    full: {
+        starLayerCount: 3,
+        starCountScale: 1,
+        dustBand: true,
+        nebula: true,
+        galaxies: true,
+        clusters: true,
+        wisps: true,
+        glowStars: true,
+        glowStarScale: 1,
+    },
+};
+
+function createBackdrop(quality) {
+    const profile = getBackdropQualityProfile(quality);
     const group = new THREE.Group();
     const pointTexture = createPointStarTexture();
     const dustTexture = createDustTexture();
@@ -147,48 +197,64 @@ function createBackdrop() {
     const galaxyTexture = createDistantGalaxyTexture();
     const clusterTexture = createStarClusterTexture();
     const wispTexture = createDustWispTexture();
-    const layers = STAR_FIELD_CONFIGS.map((config) => createStarField({
-        ...config,
-        pointTexture,
-    }));
-    const dustBand = createGalacticDustBand({
-        ...DUST_BAND_CONFIG,
-        dustTexture,
-    });
-    const nebulaGlows = createNebulaGlows({
-        glowTexture,
-        configs: NEBULA_GLOW_CONFIGS,
-        radius: 3900,
-    });
-    const distantGalaxies = createDistantGalaxies({
-        configs: DISTANT_GALAXY_CONFIGS,
-        galaxyTexture,
-        radius: 4300,
-    });
-    const starClusters = createStarClusters({
-        clusterTexture,
-        configs: STAR_CLUSTER_CONFIGS,
-        radius: 4200,
-    });
-    const dustWisps = createDustWisps({
-        configs: DUST_WISP_CONFIGS,
-        radius: 4050,
-        wispTexture,
-    });
-    const glowStars = createGlowStars({
-        count: 120,
-        radius: 3300,
-        glowTexture,
-        rotationSpeed: { x: -0.0042, y: 0.006, z: 0.003 },
-    });
+    const layers = STAR_FIELD_CONFIGS
+        .slice(0, profile.starLayerCount)
+        .map((config) => createStarField({
+            ...scaleBackdropCountConfig(config, profile.starCountScale),
+            pointTexture,
+        }));
+    const dustBand = profile.dustBand
+        ? createGalacticDustBand({
+            ...scaleBackdropCountConfig(DUST_BAND_CONFIG, profile.starCountScale),
+            dustTexture,
+        })
+        : null;
+    const nebulaGlows = profile.nebula
+        ? createNebulaGlows({
+            glowTexture,
+            configs: NEBULA_GLOW_CONFIGS,
+            radius: 3900,
+        })
+        : null;
+    const distantGalaxies = profile.galaxies
+        ? createDistantGalaxies({
+            configs: DISTANT_GALAXY_CONFIGS,
+            galaxyTexture,
+            radius: 4300,
+        })
+        : null;
+    const starClusters = profile.clusters
+        ? createStarClusters({
+            clusterTexture,
+            configs: STAR_CLUSTER_CONFIGS,
+            radius: 4200,
+        })
+        : null;
+    const dustWisps = profile.wisps
+        ? createDustWisps({
+            configs: DUST_WISP_CONFIGS,
+            radius: 4050,
+            wispTexture,
+        })
+        : null;
+    const glowStars = profile.glowStars
+        ? createGlowStars({
+            count: Math.max(18, Math.round(120 * (profile.glowStarScale || 1))),
+            radius: 3300,
+            glowTexture,
+            rotationSpeed: { x: -0.0042, y: 0.006, z: 0.003 },
+        })
+        : null;
 
     layers.forEach((layer) => group.add(layer));
-    group.add(dustBand);
-    group.add(nebulaGlows.group);
-    group.add(distantGalaxies.group);
-    group.add(starClusters.group);
-    group.add(dustWisps.group);
-    group.add(glowStars.group);
+    [
+        dustBand,
+        nebulaGlows?.group,
+        distantGalaxies?.group,
+        starClusters?.group,
+        dustWisps?.group,
+        glowStars?.group,
+    ].filter(Boolean).forEach((layer) => group.add(layer));
     group.renderOrder = -10;
 
     return {
@@ -196,13 +262,28 @@ function createBackdrop() {
         layers: [
             ...layers,
             dustBand,
-            nebulaGlows.group,
-            distantGalaxies.group,
-            starClusters.group,
-            dustWisps.group,
-            glowStars.group,
-        ],
+            nebulaGlows?.group,
+            distantGalaxies?.group,
+            starClusters?.group,
+            dustWisps?.group,
+            glowStars?.group,
+        ].filter(Boolean),
         textures: [pointTexture, dustTexture, glowTexture, galaxyTexture, clusterTexture, wispTexture],
+    };
+}
+
+function getBackdropQualityProfile(quality) {
+    return BACKDROP_QUALITY_PROFILES[normalizeBackdropQuality(quality)] || BACKDROP_QUALITY_PROFILES.full;
+}
+
+function normalizeBackdropQuality(quality) {
+    return ["low", "medium", "full"].includes(quality) ? quality : "full";
+}
+
+function scaleBackdropCountConfig(config, scale) {
+    return {
+        ...config,
+        count: Math.max(1, Math.round(config.count * scale)),
     };
 }
 

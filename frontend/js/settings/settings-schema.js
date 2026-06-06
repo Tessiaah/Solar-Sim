@@ -24,7 +24,7 @@ window.SolarSim.settings.schema = {
     graphics: {
         label: "Graphics",
         summary: "Renderer, display, and frame pacing.",
-        description: "Change the graphics according to preference.",
+        description: "Tune the renderer, visual detail, and frame pacing.",
         controls: [
             {
                 key: "resolution",
@@ -35,6 +35,7 @@ window.SolarSim.settings.schema = {
                 options: [
                     { value: "1280x720", label: "1280x720", description: "Performance preset" },
                     { value: "1920x1080", label: "1920x1080", description: "Default" },
+                    { value: "2560x1440", label: "2560x1440", description: "2K" },
                 ],
             },
             {
@@ -63,21 +64,78 @@ window.SolarSim.settings.schema = {
                 ],
             },
             {
-                key: "renderQuality",
-                label: "Render quality preset",
+                key: "skyboxQuality",
+                label: "Skybox detail",
+                type: "select",
+                defaultValue: "full",
+                owner: "renderer",
+                description: "Controls starfield and deep-space backdrop density.",
+                options: [
+                    { value: "low", label: "Low" },
+                    { value: "medium", label: "Medium" },
+                    { value: "full", label: "Full" },
+                ],
+                mapsTo: {
+                    low: { backdropDetail: "low" },
+                    medium: { backdropDetail: "medium" },
+                    full: { backdropDetail: "full" },
+                },
+            },
+            {
+                key: "sphereQuality",
+                label: "Sphere rendering",
+                type: "select",
+                defaultValue: "textured",
+                owner: "renderer",
+                description: "Controls planet materials and sphere mesh detail.",
+                options: [
+                    { value: "noTexture", label: "No texture" },
+                    { value: "basicColor", label: "Basic color" },
+                    { value: "textured", label: "Textured" },
+                ],
+                mapsTo: {
+                    noTexture: {
+                        materialMode: "noTexture",
+                        sphereGeometryDetail: 16,
+                    },
+                    basicColor: {
+                        materialMode: "basicColor",
+                        sphereGeometryDetail: 24,
+                    },
+                    textured: {
+                        materialMode: "textured",
+                        sphereGeometryDetail: 32,
+                    },
+                },
+            },
+            {
+                key: "lightingQuality",
+                label: "Lighting",
                 type: "select",
                 defaultValue: "medium",
                 owner: "renderer",
-                description: "Maps to sphere geometry detail.",
+                description: "Controls scene light balance and fill lighting.",
                 options: [
                     { value: "low", label: "Low" },
                     { value: "medium", label: "Medium" },
                     { value: "high", label: "High" },
                 ],
                 mapsTo: {
-                    low: { sphereGeometryDetail: 16 },
-                    medium: { sphereGeometryDetail: 32 },
-                    high: { sphereGeometryDetail: 64 },
+                    low: {
+                        ambientIntensity: 1.05,
+                        primaryIntensity: 1.45,
+                        rimIntensity: 0.0,
+                    },
+                    medium: {
+                        ambientIntensity: 0.82,
+                        primaryIntensity: 2.8,
+                        rimIntensity: 0.18,
+                    },
+                    high: {
+                        ambientIntensity: 0.58,
+                        primaryIntensity: 3.4,
+                        rimIntensity: 0.34,
+                    },
                 },
             },
         ],
@@ -85,7 +143,7 @@ window.SolarSim.settings.schema = {
     simulation: {
         label: "Simulation",
         summary: "Backend-owned physics configuration.",
-        description: "Control certain backend settings.",
+        description: "Inspect backend simulation controls and visual simulation aids.",
         controls: [
             {
                 key: "physicsIntegrator",
@@ -96,14 +154,6 @@ window.SolarSim.settings.schema = {
                 options: [
                     { value: "velocityVerlet", label: "Velocity Verlet" },
                 ],
-            },
-            {
-                key: "fixedTimestep",
-                label: "Fixed timestep",
-                type: "readonly",
-                defaultValue: "Backend controlled",
-                owner: "python",
-                description: "Required by the simulation loop. The frontend may display this but must not mutate it.",
             },
             {
                 key: "trailSystem",
@@ -169,7 +219,7 @@ window.SolarSim.settings.schema = {
     debug: {
         label: "Debug",
         summary: "Labels, vectors, overlays, energy, and momentum diagnostics.",
-        description: "Change according to what needs to be tracked",
+        description: "Choose which diagnostics and visual helpers are visible while simulating.",
         controls: [
             {
                 key: "uiToggles",
@@ -227,4 +277,11 @@ window.SolarSim.settings.schema = {
             },
         ],
     },
+};
+
+window.SolarSim.settings.getControlProfile = function getControlProfile(categoryKey, settingKey, value) {
+    const control = window.SolarSim.settings.schema?.[categoryKey]?.controls
+        ?.find((item) => item.key === settingKey);
+
+    return control?.mapsTo?.[value] || null;
 };

@@ -20,6 +20,11 @@ window.SolarSim.screens.initWelcomeScreen({
     store: settingsStore,
 });
 
+window.SolarSim.screens.initScenariosScreen({
+    root: document.querySelector('[data-screen="scenarios"]'),
+    router,
+});
+
 window.SolarSim.screens.initSettingsScreen({
     root: document.querySelector('[data-screen="settings"]'),
     router,

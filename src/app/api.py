@@ -19,6 +19,12 @@ class AppApi:
     def list_scenarios(self) -> dict:
         return self.simulation.list_scenarios()
 
+    def list_scenario_bodies(self) -> dict:
+        return self.simulation.list_scenario_bodies()
+
+    def create_custom_scenario(self, config: dict | None = None) -> dict:
+        return self.simulation.create_custom_scenario(config)
+
     def load_scenario(self, scenario_id: str = "sun-earth") -> dict:
         return self.simulation.load_scenario(scenario_id)
 
