@@ -17,6 +17,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     const bodyLabels = new Map();
     const orbitLines = new Map();
     const bodyTrails = new Map();
+    const bodyVisualPreviews = new Map();
     const velocityVectorLines = new Map();
     const accelerationVectorLines = new Map();
     const renderer = new THREE.WebGLRenderer({
@@ -58,6 +59,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     let lastRenderMs = performance.now();
     let lastSnapshot = null;
     let currentScenarioId = null;
+    let scenarioEpoch = 0;
     let simulationStateToken = 0;
     let selectedBodyId = null;
     let labelsVisible = store?.getState()?.debug?.uiToggles?.showLabels ?? true;
@@ -163,6 +165,8 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
             }
 
             if (response?.scenario) {
+                scenarioEpoch += 1;
+                bodyVisualPreviews.clear();
                 applyScenarioMetadata(response.scenario);
             }
 
@@ -180,6 +184,70 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     async function resetScenario() {
         const scenarioId = currentScenarioId || lastSnapshot?.scenarioId || "solar-system";
         return loadScenario(scenarioId);
+    }
+
+    async function updateBodyParameters(bodyId, updates) {
+        if (!bodyId) {
+            return { ok: false, reason: "No body selected." };
+        }
+
+        const requestStateToken = simulationStateToken;
+
+        try {
+            const response = await window.SolarSim.backend.simulation.updateBodyParameters(bodyId, updates);
+
+            if (requestStateToken !== simulationStateToken) {
+                return { ok: false, reason: "Body update superseded by a newer scenario request." };
+            }
+
+            if (response?.scenario) {
+                bodyVisualPreviews.delete(bodyId);
+                applyScenarioMetadata(response.scenario);
+                selectedBodyId = chooseSelectedBodyId(bodyId);
+                notifySelectionChanged();
+            }
+
+            if (response?.snapshot) {
+                setLastSnapshot(response.snapshot);
+            }
+
+            return response;
+        } catch (error) {
+            console.info("Body parameter update failed.", error);
+            return { ok: false, reason: String(error) };
+        }
+    }
+
+    async function resetBody(bodyId) {
+        if (!bodyId) {
+            return { ok: false, reason: "No body selected." };
+        }
+
+        const requestStateToken = simulationStateToken;
+
+        try {
+            const response = await window.SolarSim.backend.simulation.resetBody(bodyId);
+
+            if (requestStateToken !== simulationStateToken) {
+                return { ok: false, reason: "Body reset superseded by a newer scenario request." };
+            }
+
+            if (response?.scenario) {
+                bodyVisualPreviews.delete(bodyId);
+                applyScenarioMetadata(response.scenario);
+                selectedBodyId = chooseSelectedBodyId(bodyId);
+                notifySelectionChanged();
+            }
+
+            if (response?.snapshot) {
+                setLastSnapshot(response.snapshot);
+            }
+
+            return response;
+        } catch (error) {
+            console.info("Body reset failed.", error);
+            return { ok: false, reason: String(error) };
+        }
     }
 
     function frame(activeRunToken) {
@@ -254,6 +322,22 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         renderCurrentFrame(0);
     }
 
+    function previewBodyParameters(bodyId, values) {
+        if (!bodyId) {
+            return;
+        }
+
+        const preview = normalizeBodyVisualPreview(values);
+
+        if (preview) {
+            bodyVisualPreviews.set(bodyId, preview);
+        } else {
+            bodyVisualPreviews.delete(bodyId);
+        }
+
+        applyBodyVisualPreview(bodyId);
+    }
+
     function renderCurrentFrame(deltaS) {
         if (lastSnapshot) {
             syncBodyMeshes(lastSnapshot.bodies);
@@ -305,12 +389,14 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         });
 
         bodies.forEach((body) => {
-            const metadata = getBodyMetadata(body.id);
+            const metadata = getBodyRenderMetadata(body.id);
 
             if (!bodyMeshes.has(body.id)) {
                 const mesh = createBodyMesh(metadata, materialFactory, scale, geometryDetail);
                 bodyMeshes.set(body.id, mesh);
                 scene.add(mesh);
+            } else {
+                updateBodyMeshGeometry(bodyMeshes.get(body.id), metadata, geometryDetail);
             }
 
             if (!bodyRingMeshes.has(body.id)) {
@@ -339,7 +425,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
                 return;
             }
 
-            scale.toScenePosition(body.positionM, mesh.position);
+            scale.toScenePosition(getBodyRenderPositionM(body), mesh.position);
 
             const rings = bodyRingMeshes.get(body.id);
 
@@ -347,6 +433,78 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
                 rings.position.copy(mesh.position);
             }
         });
+    }
+
+    function applyBodyVisualPreview(bodyId) {
+        const metadata = getBodyRenderMetadata(bodyId);
+        const mesh = bodyMeshes.get(bodyId);
+
+        if (metadata && mesh) {
+            updateBodyMeshGeometry(mesh, metadata, currentGeometryDetail);
+            updateBodyRingPreviewScale(bodyId, metadata);
+        }
+
+        const snapshotBody = lastSnapshot?.bodies?.find((body) => body.id === bodyId);
+
+        if (snapshotBody && mesh) {
+            scale.toScenePosition(getBodyRenderPositionM(snapshotBody), mesh.position);
+            bodyRingMeshes.get(bodyId)?.position.copy(mesh.position);
+        }
+    }
+
+    function getBodyRenderMetadata(bodyId) {
+        const metadata = getBodyMetadata(bodyId);
+        const preview = bodyVisualPreviews.get(bodyId);
+
+        if (!metadata || !Number.isFinite(preview?.radiusM)) {
+            return metadata;
+        }
+
+        return {
+            ...metadata,
+            radiusM: preview.radiusM,
+        };
+    }
+
+    function getBodyRenderPositionM(body) {
+        const preview = bodyVisualPreviews.get(body.id);
+
+        if (!Number.isFinite(preview?.distanceM)) {
+            return body.positionM;
+        }
+
+        return scaleVectorMagnitudeM(body.positionM, preview.distanceM);
+    }
+
+    function updateBodyMeshGeometry(mesh, metadata, geometryDetail) {
+        if (!mesh || !metadata) {
+            return;
+        }
+
+        const nextRadius = scale.radiusForBody(metadata);
+        const currentRadius = getMeshRadius(mesh);
+
+        if (Math.abs(nextRadius - currentRadius) < 0.001) {
+            return;
+        }
+
+        mesh.geometry.dispose();
+        mesh.geometry = createSphereGeometry(nextRadius, geometryDetail || currentGeometryDetail);
+    }
+
+    function updateBodyRingPreviewScale(bodyId, metadata) {
+        const rings = bodyRingMeshes.get(bodyId);
+        const originalMetadata = getBodyMetadata(bodyId);
+
+        if (!rings || !metadata || !originalMetadata) {
+            return;
+        }
+
+        const originalRadius = scale.radiusForBody(originalMetadata);
+        const previewRadius = scale.radiusForBody(metadata);
+        const ringScale = originalRadius > 0 ? previewRadius / originalRadius : 1;
+
+        rings.scale.setScalar(ringScale);
     }
 
     function updateBodyRingAnimations(deltaS) {
@@ -835,7 +993,9 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         onPlaybackChanged,
         onSelectionChanged,
         onSnapshot,
+        previewBodyParameters,
         renderSnapshot,
+        resetBody,
         resetScenario,
         orbitCamera,
         selectBody,
@@ -849,6 +1009,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         stepOnce,
         stop,
         togglePlayback,
+        updateBodyParameters,
     };
 
     function getSphereGeometryDetail() {
@@ -1301,6 +1462,8 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     function getBodyListPayload() {
         return {
             bodies: Array.from(bodyMetadata.values()).map(copyBodyMetadata),
+            scenarioEpoch,
+            scenarioId: currentScenarioId,
             selectedBodyId,
         };
     }
@@ -2067,6 +2230,7 @@ function getRendererBodyDisplayName(body) {
 function createDisplayScale() {
     const sunBodyId = "sun";
     const earthRadiusM = 6_371_000;
+    const sunRadiusM = 696_340_000;
     const astronomicalUnitM = 149_597_870_700;
     const minPlanetRadius = 4.2;
     const planetRadiusMultiplier = 4.2;
@@ -2080,7 +2244,9 @@ function createDisplayScale() {
     return {
         radiusForBody(body) {
             if (body.id === sunBodyId) {
-                return sunRadius;
+                const sunRadiusRatio = Math.max(body.radiusM / sunRadiusM, 0.01);
+
+                return Math.min(140, Math.max(minPlanetRadius, sunRadius * Math.sqrt(sunRadiusRatio)));
             }
 
             const earthRadiusRatio = Math.max(body.radiusM / earthRadiusM, 0.01);
@@ -2162,6 +2328,47 @@ function normalizeVector3M(values) {
         Number(values[0]) || 0,
         Number(values[1]) || 0,
         Number(values[2]) || 0,
+    ];
+}
+
+function normalizeBodyVisualPreview(values) {
+    if (!values || typeof values !== "object") {
+        return null;
+    }
+
+    const preview = {};
+    const radiusM = Number(values.radiusM);
+    const distanceM = Number(values.distanceM);
+
+    if (Number.isFinite(radiusM) && radiusM > 0) {
+        preview.radiusM = radiusM;
+    }
+
+    if (Number.isFinite(distanceM) && distanceM >= 0) {
+        preview.distanceM = distanceM;
+    }
+
+    return Object.keys(preview).length > 0 ? preview : null;
+}
+
+function scaleVectorMagnitudeM(values, magnitude) {
+    const vector = normalizeVector3M(values);
+    const currentMagnitude = Math.hypot(vector[0], vector[1], vector[2]);
+
+    if (!Number.isFinite(magnitude) || magnitude < 0) {
+        return vector;
+    }
+
+    if (currentMagnitude === 0) {
+        return [magnitude, 0, 0];
+    }
+
+    const scalar = magnitude / currentMagnitude;
+
+    return [
+        vector[0] * scalar,
+        vector[1] * scalar,
+        vector[2] * scalar,
     ];
 }
 

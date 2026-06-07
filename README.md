@@ -106,7 +106,7 @@ Main frontend areas:
 - `frontend/js/screens/welcome.js`: welcome screen behavior.
 - `frontend/js/screens/scenarios.js`: scenario list and custom scenario creation screen.
 - `frontend/js/screens/settings.js`: settings UI.
-- `frontend/js/screens/simulation.js`: simulation screen startup/stop behavior and DOM bindings for playback, selected-body inspection, quick settings, and time controls.
+- `frontend/js/screens/simulation.js`: simulation screen startup/stop behavior and DOM bindings for playback, selected-body inspection drawer, body facts, sandbox body tuning, quick settings, and time controls.
 - `frontend/js/api/backend-api.js`: small JavaScript adapter around PyWebView API calls.
 - `frontend/js/utils/display-format.js`: shared frontend formatting and translation helpers for body names, scenario names, units, durations, facts, and vectors.
 - `frontend/js/rendering/simulation-renderer.js`: Three.js simulation scene and body mesh updates.
@@ -132,6 +132,8 @@ Simulation methods:
 - `list_scenarios()`
 - `list_scenario_bodies()`
 - `create_custom_scenario(config)`
+- `update_body_parameters(body_id, updates)`
+- `reset_body(body_id)`
 - `load_scenario(scenario_id="sun-earth")`
 - `step_simulation(steps=1)`
 - `get_simulation_snapshot()`
@@ -204,6 +206,10 @@ Scenario metadata also includes:
 ```
 
 The renderer caches static metadata and uses dynamic snapshots only to update mesh positions. Body facts are translation keys when they are app-authored facts; user/authored scenarios may still provide plain strings as a fallback.
+
+`update_body_parameters(body_id, updates)` is the backend-owned sandbox mutation path for selected-body tuning. The frontend may request new numeric values for `massKg`, `radiusM`, `distanceM`, and `speedMS`, but it must do so through this API. Python validates the numbers, updates the `SimBody` definition/state, and returns fresh scenario metadata plus a fresh dynamic snapshot. The frontend then refreshes the renderer from that returned data instead of directly changing physics state.
+
+`reset_body(body_id)` restores one live body from a freshly created copy of the current scenario. It resets that body's definition, position vector, and velocity vector. It does not rewind elapsed time or undo any gravitational effects already propagated to other bodies. Use the system reset path, implemented by reloading the current scenario through `load_scenario(...)`, for a physically clean full reset.
 
 ## Visuals and Textures
 
@@ -333,7 +339,9 @@ Current controls:
 - Body selector: selects a body for inspection and visual highlighting.
 - Time readout: displays elapsed simulation days and an equivalent year conversion. The renderer smooths only the displayed readout between backend snapshots; Python still owns the actual elapsed simulation time.
 - Body stats: displays static mass/radius metadata and dynamic distance/velocity from the latest backend snapshot.
-- Facts: displays backend-provided body facts plus derived runtime facts such as parent body, integration status, texture usage, and timestep.
+- Inspector drawer: left-side collapsible drawer for selected-body stats, quick settings, body facts, and sandbox controls.
+- Facts: opened from the inspector lightbulb button. It displays backend-provided body facts plus derived runtime facts such as parent body, integration status, texture usage, and timestep.
+- Sandbox controls: opened from the inspector sliders button. It provides persistent multiplier sliders and raw SI value inputs for selected-body mass, radius, current distance from origin, and current speed. While dragging, radius and distance use renderer-only preview so the stat cards and visible mesh update immediately without mutating Python physics state. Slider release calls backend `update_body_parameters(...)`, custom number fields commit explicit SI values, Reset body calls backend `reset_body(...)`, and Reset system reloads the current scenario through `load_scenario(...)`. The frontend only renders returned metadata/snapshots as authoritative state.
 - Focus: moves the camera near the selected body.
 - Labels: toggles renderer-owned label sprites and persists that toggle through the in-memory settings store.
 - Orbits: toggles renderer-owned circular orbit guide lines around each body's parent and persists that toggle through the in-memory settings store.

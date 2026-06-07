@@ -351,53 +351,80 @@
                     </div>
                 </header>
 
-                <aside class="simulation-inspector" aria-label="Body inspector" data-i18n-aria-label="simulation.inspector">
-                    <div class="simulation-panel-header">
-                        <span data-i18n="simulation.body">Body</span>
-                        <select data-simulation-body-select aria-label="Select body" data-i18n-aria-label="simulation.selectBody"></select>
+                <aside class="simulation-inspector is-open" aria-label="Body inspector" data-i18n-aria-label="simulation.inspector" data-inspector-drawer>
+                    <div class="simulation-inspector-content" id="simulation-inspector-content">
+                        <div class="simulation-panel-header">
+                            <span data-i18n="simulation.body">Body</span>
+                            <select data-simulation-body-select aria-label="Select body" data-i18n-aria-label="simulation.selectBody"></select>
+                            <div class="body-panel-actions" aria-label="Body menus" data-i18n-aria-label="simulation.bodyMenus">
+                                <button type="button" class="simulation-icon-button" data-body-panel-toggle="facts" aria-pressed="false" aria-label="Open facts" data-i18n-aria-label="simulation.openFacts" title="Facts" data-i18n-title="simulation.facts">
+                                    <span class="app-icon app-icon-lightbulb" aria-hidden="true"></span>
+                                </button>
+                                <button type="button" class="simulation-icon-button" data-body-panel-toggle="sandbox" aria-pressed="false" aria-label="Open sandbox controls" data-i18n-aria-label="simulation.openSandbox" title="Sandbox" data-i18n-title="simulation.sandbox">
+                                    <span class="app-icon app-icon-sliders" aria-hidden="true"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <dl class="body-stats">
+                            <div>
+                                <dt data-i18n="simulation.mass">Mass</dt>
+                                <dd data-body-stat="mass">--</dd>
+                            </div>
+                            <div>
+                                <dt data-i18n="simulation.radius">Radius</dt>
+                                <dd data-body-stat="radius">--</dd>
+                            </div>
+                            <div>
+                                <dt data-i18n="simulation.fromOrigin">From Origin</dt>
+                                <dd data-body-stat="distance">--</dd>
+                            </div>
+                            <div>
+                                <dt data-i18n="simulation.velocity">Velocity</dt>
+                                <dd data-body-stat="velocity">--</dd>
+                            </div>
+                        </dl>
+
+                        <div class="quick-controls" aria-label="Quick settings" data-i18n-aria-label="simulation.quickSettings">
+                            <button type="button" data-simulation-command="focus-selected" data-i18n="simulation.focus">Focus</button>
+                            <label>
+                                <input type="checkbox" data-simulation-toggle="labels" checked>
+                                <span data-i18n="simulation.labels">Labels</span>
+                            </label>
+                            <label>
+                                <input type="checkbox" data-simulation-toggle="orbits">
+                                <span data-i18n="simulation.orbits">Orbits</span>
+                            </label>
+                            <label>
+                                <input type="checkbox" data-simulation-toggle="track-selected">
+                                <span data-i18n="simulation.track">Track</span>
+                            </label>
+                        </div>
+
+                        <section class="body-subpanel body-facts" aria-label="Body facts" data-i18n-aria-label="simulation.facts" data-body-panel="facts" hidden>
+                            <h2 data-i18n="simulation.facts">Facts</h2>
+                            <ul data-body-facts>
+                                <li>--</li>
+                            </ul>
+                        </section>
+
+                        <section class="body-subpanel body-sandbox" aria-label="Body sandbox controls" data-i18n-aria-label="simulation.sandbox" data-body-panel="sandbox" hidden>
+                            <div class="body-subpanel-header">
+                                <h2 data-i18n="simulation.sandbox">Sandbox</h2>
+                                <output data-body-tune-status data-i18n="simulation.sandboxReady">Ready</output>
+                            </div>
+                            <div class="body-tuning-controls" data-body-tuning-controls></div>
+                            <div class="body-tuning-actions">
+                                <button type="button" class="body-tuning-reset" data-body-tune-reset data-i18n="simulation.resetBody">Reset body</button>
+                                <button type="button" class="body-tuning-reset" data-system-reset data-i18n="simulation.resetSystem">Reset system</button>
+                            </div>
+                        </section>
                     </div>
 
-                    <dl class="body-stats">
-                        <div>
-                            <dt data-i18n="simulation.mass">Mass</dt>
-                            <dd data-body-stat="mass">--</dd>
-                        </div>
-                        <div>
-                            <dt data-i18n="simulation.radius">Radius</dt>
-                            <dd data-body-stat="radius">--</dd>
-                        </div>
-                        <div>
-                            <dt data-i18n="simulation.fromOrigin">From Origin</dt>
-                            <dd data-body-stat="distance">--</dd>
-                        </div>
-                        <div>
-                            <dt data-i18n="simulation.velocity">Velocity</dt>
-                            <dd data-body-stat="velocity">--</dd>
-                        </div>
-                    </dl>
-
-                    <div class="quick-controls" aria-label="Quick settings" data-i18n-aria-label="simulation.quickSettings">
-                        <button type="button" data-simulation-command="focus-selected" data-i18n="simulation.focus">Focus</button>
-                        <label>
-                            <input type="checkbox" data-simulation-toggle="labels" checked>
-                            <span data-i18n="simulation.labels">Labels</span>
-                        </label>
-                        <label>
-                            <input type="checkbox" data-simulation-toggle="orbits">
-                            <span data-i18n="simulation.orbits">Orbits</span>
-                        </label>
-                        <label>
-                            <input type="checkbox" data-simulation-toggle="track-selected">
-                            <span data-i18n="simulation.track">Track</span>
-                        </label>
-                    </div>
-
-                    <section class="body-facts" aria-label="Body facts" data-i18n-aria-label="simulation.facts">
-                        <h2 data-i18n="simulation.facts">Facts</h2>
-                        <ul data-body-facts>
-                            <li>--</li>
-                        </ul>
-                    </section>
+                    <button type="button" class="simulation-inspector-toggle" data-inspector-toggle aria-controls="simulation-inspector-content" aria-expanded="true" aria-label="Collapse body inspector" data-i18n-aria-label="simulation.collapseInspector">
+                        <span class="simulation-drawer-arrow" aria-hidden="true"></span>
+                        <span data-i18n="simulation.inspect">Inspect</span>
+                    </button>
                 </aside>
 
                 <section class="simulation-controls" aria-label="Simulation controls" data-i18n-aria-label="simulation.controls">

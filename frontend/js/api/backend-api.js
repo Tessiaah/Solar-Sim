@@ -38,6 +38,12 @@ window.SolarSim.backend = (function createBackendApi() {
             createCustomScenario(config) {
                 return call("create_custom_scenario", config);
             },
+            updateBodyParameters(bodyId, updates) {
+                return call("update_body_parameters", bodyId, updates);
+            },
+            resetBody(bodyId) {
+                return call("reset_body", bodyId);
+            },
             loadScenario(scenarioId) {
                 return call("load_scenario", scenarioId);
             },

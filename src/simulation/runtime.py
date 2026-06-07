@@ -1,3 +1,7 @@
+from dataclasses import replace
+
+import numpy as np
+
 from src.data.constants import DAY_S
 from src.simulation.physics import compute_system_diagnostics, velocity_verlet
 from src.simulation.ids import body_id_from_name
@@ -105,6 +109,70 @@ class SimulationRuntime:
 
         return self.load_scenario(scenario_id)
 
+    def update_body_parameters(self, body_id: str, updates: dict | None = None) -> dict:
+        body = self._find_body(body_id)
+
+        if body is None:
+            return {"ok": False, "reason": f"Unknown body: {body_id}"}
+
+        safe_updates = updates if isinstance(updates, dict) else {}
+        next_definition = body.definition
+
+        if "massKg" in safe_updates:
+            next_definition = replace(
+                next_definition,
+                mass_kg=normalize_positive_float(safe_updates["massKg"], next_definition.mass_kg),
+            )
+
+        if "radiusM" in safe_updates:
+            next_definition = replace(
+                next_definition,
+                radius_m=normalize_positive_float(safe_updates["radiusM"], next_definition.radius_m),
+            )
+
+        body.definition = next_definition
+
+        if "distanceM" in safe_updates:
+            body.state.position_m = scale_vector_magnitude(
+                body.state.position_m,
+                normalize_non_negative_float(
+                    safe_updates["distanceM"],
+                    float(np.linalg.norm(body.state.position_m)),
+                ),
+                fallback_direction=np.array([1.0, 0.0, 0.0], dtype=np.float64),
+            )
+
+        if "speedMS" in safe_updates:
+            body.state.velocity_ms = scale_vector_magnitude(
+                body.state.velocity_ms,
+                normalize_non_negative_float(
+                    safe_updates["speedMS"],
+                    float(np.linalg.norm(body.state.velocity_ms)),
+                ),
+                fallback_direction=get_tangent_direction(body.state.position_m),
+            )
+
+        return {
+            "ok": True,
+            "scenario": self.get_scenario_metadata(),
+            "snapshot": self.get_snapshot(),
+        }
+
+    def reset_body(self, body_id: str) -> dict:
+        body = self._find_body(body_id)
+        initial_body = self._find_body_in(self._create_scenario_bodies(), body_id)
+
+        if body is None or initial_body is None:
+            return {"ok": False, "reason": f"Unknown body: {body_id}"}
+
+        restore_body_from_initial_state(body, initial_body)
+
+        return {
+            "ok": True,
+            "scenario": self.get_scenario_metadata(),
+            "snapshot": self.get_snapshot(),
+        }
+
     def load_scenario(self, scenario_id: str = "sun-earth") -> dict:
         scenario = self._get_scenario(scenario_id)
 
@@ -112,7 +180,7 @@ class SimulationRuntime:
             return {"ok": False, "reason": f"Unknown scenario: {scenario_id}"}
 
         self._scenario_id = scenario_id
-        self._bodies = scenario["factory"]()
+        self._bodies = self._create_scenario_bodies()
         self._elapsed_s = 0.0
 
         return {
@@ -163,6 +231,26 @@ class SimulationRuntime:
 
     def _get_scenario(self, scenario_id: str) -> dict | None:
         return SCENARIOS.get(scenario_id) or self._custom_scenarios.get(scenario_id)
+
+    def _find_body(self, body_id: str):
+        return self._find_body_in(self._bodies, body_id)
+
+    def _find_body_in(self, bodies, body_id: str):
+        safe_body_id = str(body_id or "").strip().lower()
+
+        for body in bodies:
+            if body_id_from_name(body.definition.name) == safe_body_id:
+                return body
+
+        return None
+
+    def _create_scenario_bodies(self):
+        scenario = self._get_scenario(self._scenario_id)
+
+        if scenario is None:
+            return []
+
+        return scenario["factory"]()
 
 
 def serialize_body_metadata(body) -> dict:
@@ -310,6 +398,70 @@ def normalize_custom_scenario_name(value, counter: int) -> str:
 
 def normalize_include_sun(value) -> bool:
     return value is not False
+
+
+def normalize_positive_float(value, fallback: float) -> float:
+    try:
+        number_value = float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+    if not np.isfinite(number_value) or number_value <= 0.0:
+        return fallback
+
+    return number_value
+
+
+def normalize_non_negative_float(value, fallback: float) -> float:
+    try:
+        number_value = float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+    if not np.isfinite(number_value) or number_value < 0.0:
+        return fallback
+
+    return number_value
+
+
+def scale_vector_magnitude(
+    vector: np.ndarray,
+    magnitude: float,
+    fallback_direction: np.ndarray,
+) -> np.ndarray:
+    current_magnitude = float(np.linalg.norm(vector))
+
+    if current_magnitude > 0.0:
+        return vector / current_magnitude * magnitude
+
+    fallback_magnitude = float(np.linalg.norm(fallback_direction))
+
+    if fallback_magnitude == 0.0:
+        return np.zeros(3, dtype=np.float64)
+
+    return fallback_direction / fallback_magnitude * magnitude
+
+
+def get_tangent_direction(position_m: np.ndarray) -> np.ndarray:
+    if float(np.linalg.norm(position_m)) == 0.0:
+        return np.array([0.0, 1.0, 0.0], dtype=np.float64)
+
+    tangent = np.array([
+        -position_m[1],
+        position_m[0],
+        0.0,
+    ], dtype=np.float64)
+
+    if float(np.linalg.norm(tangent)) == 0.0:
+        return np.array([0.0, 1.0, 0.0], dtype=np.float64)
+
+    return tangent
+
+
+def restore_body_from_initial_state(body, initial_body) -> None:
+    body.definition = initial_body.definition
+    body.state.position_m = np.array(initial_body.state.position_m, dtype=np.float64, copy=True)
+    body.state.velocity_ms = np.array(initial_body.state.velocity_ms, dtype=np.float64, copy=True)
 
 
 def build_custom_scenario_description(

@@ -25,6 +25,12 @@ class AppApi:
     def create_custom_scenario(self, config: dict | None = None) -> dict:
         return self.simulation.create_custom_scenario(config)
 
+    def update_body_parameters(self, body_id: str, updates: dict | None = None) -> dict:
+        return self.simulation.update_body_parameters(body_id, updates)
+
+    def reset_body(self, body_id: str) -> dict:
+        return self.simulation.reset_body(body_id)
+
     def load_scenario(self, scenario_id: str = "sun-earth") -> dict:
         return self.simulation.load_scenario(scenario_id)
 
