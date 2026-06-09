@@ -77,6 +77,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
     const uiState = {
         bodiesById: new Map(),
         latestSnapshot: null,
+        positionPreviewsByBodyId: new Map(),
         scenarioEpoch: 0,
         scenarioId: null,
         selectedBodyId: null,
@@ -91,6 +92,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
 
     renderer.onBodiesChanged((payload) => {
         uiState.bodiesById = new Map(payload.bodies.map((body) => [body.id, body]));
+        uiState.positionPreviewsByBodyId.clear();
         uiState.scenarioEpoch = payload.scenarioEpoch ?? uiState.scenarioEpoch;
         uiState.scenarioId = payload.scenarioId ?? uiState.scenarioId;
         uiState.selectedBodyId = payload.selectedBodyId;
@@ -118,6 +120,23 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
 
     renderer.onPlaybackChanged((state) => {
         updatePlaybackControls(controls, state);
+    });
+
+    window.addEventListener("solar-sim:body-position-preview", (event) => {
+        const bodyId = event.detail?.bodyId;
+        const positionM = event.detail?.positionM;
+
+        if (!bodyId) {
+            return;
+        }
+
+        if (Array.isArray(positionM)) {
+            uiState.positionPreviewsByBodyId.set(bodyId, positionM);
+        } else {
+            uiState.positionPreviewsByBodyId.delete(bodyId);
+        }
+
+        updateSelectedBodyStats(controls.stats, uiState, controls.tuning);
     });
 
     window.addEventListener("solar-sim:launch-scenario", (event) => {
@@ -268,6 +287,7 @@ function collectSimulationControls(root) {
         },
         togglePlaybackButton: root.querySelector('[data-simulation-command="toggle-playback"]'),
         trackToggle: root.querySelector('[data-simulation-toggle="track-selected"]'),
+        transformToggle: root.querySelector("[data-body-transform-toggle]"),
     };
 }
 
@@ -322,6 +342,13 @@ function bindBodyInspectorControls({ controls, renderer, uiState }) {
                 syncBodyTuningControls(controls.tuning, uiState);
             }
         });
+    });
+
+    controls.transformToggle?.addEventListener("click", () => {
+        const isActive = controls.transformToggle.getAttribute("aria-pressed") !== "true";
+
+        renderer.setTransformGizmoVisible?.(isActive);
+        controls.transformToggle.setAttribute("aria-pressed", String(isActive));
     });
 
     renderBodyTuningControls(controls.tuning);
@@ -1298,6 +1325,7 @@ function updateSelectedBodyStats(stats, uiState, tuning = null) {
     const previewRadiusM = getPreviewTuningStatValue(tuning, selectedBodyId, "radiusM");
     const previewDistanceM = getPreviewTuningStatValue(tuning, selectedBodyId, "distanceM");
     const previewSpeedMS = getPreviewTuningStatValue(tuning, selectedBodyId, "speedMS");
+    const previewPositionDistanceM = getPreviewBodyPositionDistance(uiState, selectedBodyId);
 
     setStat(stats.mass, Number.isFinite(previewMassKg)
         ? window.SolarSim.format.mass(previewMassKg)
@@ -1305,13 +1333,23 @@ function updateSelectedBodyStats(stats, uiState, tuning = null) {
     setStat(stats.radius, Number.isFinite(previewRadiusM)
         ? window.SolarSim.format.distance(previewRadiusM)
         : metadata ? window.SolarSim.format.distance(metadata.radiusM) : "--");
-    setStat(stats.distance, Number.isFinite(previewDistanceM)
-        ? window.SolarSim.format.distance(previewDistanceM)
-        : snapshotBody ? window.SolarSim.format.distance(window.SolarSim.format.vectorMagnitude(snapshotBody.positionM)) : "--");
+    setStat(stats.distance, Number.isFinite(previewPositionDistanceM)
+        ? window.SolarSim.format.distance(previewPositionDistanceM)
+        : Number.isFinite(previewDistanceM)
+            ? window.SolarSim.format.distance(previewDistanceM)
+            : snapshotBody ? window.SolarSim.format.distance(window.SolarSim.format.vectorMagnitude(snapshotBody.positionM)) : "--");
     setStat(stats.velocity, Number.isFinite(previewSpeedMS)
         ? window.SolarSim.format.velocity(previewSpeedMS)
         : snapshotBody ? window.SolarSim.format.velocity(window.SolarSim.format.vectorMagnitude(snapshotBody.velocityMS)) : "--");
     updateSelectedBodyFacts(stats.factsList, metadata, snapshotBody, uiState.latestSnapshot);
+}
+
+function getPreviewBodyPositionDistance(uiState, bodyId) {
+    const positionM = bodyId ? uiState.positionPreviewsByBodyId?.get(bodyId) : null;
+
+    return Array.isArray(positionM)
+        ? window.SolarSim.format.vectorMagnitude(positionM)
+        : NaN;
 }
 
 function getPreviewTuningStatValue(tuning, bodyId, key) {

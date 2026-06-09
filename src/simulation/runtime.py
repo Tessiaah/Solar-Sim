@@ -142,6 +142,12 @@ class SimulationRuntime:
                 fallback_direction=np.array([1.0, 0.0, 0.0], dtype=np.float64),
             )
 
+        if "positionM" in safe_updates:
+            body.state.position_m = normalize_vector3_float(
+                safe_updates["positionM"],
+                body.state.position_m,
+            )
+
         if "speedMS" in safe_updates:
             body.state.velocity_ms = scale_vector_magnitude(
                 body.state.velocity_ms,
@@ -422,6 +428,21 @@ def normalize_non_negative_float(value, fallback: float) -> float:
         return fallback
 
     return number_value
+
+
+def normalize_vector3_float(value, fallback: np.ndarray) -> np.ndarray:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return np.array(fallback, dtype=np.float64, copy=True)
+
+    try:
+        vector = np.array(value[:3], dtype=np.float64)
+    except (TypeError, ValueError):
+        return np.array(fallback, dtype=np.float64, copy=True)
+
+    if not np.all(np.isfinite(vector)):
+        return np.array(fallback, dtype=np.float64, copy=True)
+
+    return vector
 
 
 def scale_vector_magnitude(

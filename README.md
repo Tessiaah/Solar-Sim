@@ -113,6 +113,7 @@ Main frontend areas:
 - `frontend/js/rendering/materials.js`: material and texture creation.
 - `frontend/js/rendering/space-backdrop.js`: Three.js starfield background.
 - `frontend/js/rendering/fly-camera.js`: simulation camera movement, RMB mouse look without browser Pointer Lock, and scroll zoom.
+- `frontend/js/rendering/transform-gizmo.js`: renderer-owned Blender-style selected-body transform handles.
 
 CSS is under `frontend/css`.
 
@@ -207,7 +208,7 @@ Scenario metadata also includes:
 
 The renderer caches static metadata and uses dynamic snapshots only to update mesh positions. Body facts are translation keys when they are app-authored facts; user/authored scenarios may still provide plain strings as a fallback.
 
-`update_body_parameters(body_id, updates)` is the backend-owned sandbox mutation path for selected-body tuning. The frontend may request new numeric values for `massKg`, `radiusM`, `distanceM`, and `speedMS`, but it must do so through this API. Python validates the numbers, updates the `SimBody` definition/state, and returns fresh scenario metadata plus a fresh dynamic snapshot. The frontend then refreshes the renderer from that returned data instead of directly changing physics state.
+`update_body_parameters(body_id, updates)` is the backend-owned sandbox mutation path for selected-body tuning. The frontend may request new numeric values for `massKg`, `radiusM`, `distanceM`, `speedMS`, and `positionM`, but it must do so through this API. Python validates the numbers, updates the `SimBody` definition/state, and returns fresh scenario metadata plus a fresh dynamic snapshot. The frontend then refreshes the renderer from that returned data instead of directly changing physics state.
 
 `reset_body(body_id)` restores one live body from a freshly created copy of the current scenario. It resets that body's definition, position vector, and velocity vector. It does not rewind elapsed time or undo any gravitational effects already propagated to other bodies. Use the system reset path, implemented by reloading the current scenario through `load_scenario(...)`, for a physically clean full reset.
 
@@ -295,6 +296,7 @@ Current rendering behavior:
 - Creates renderer-owned orbit lines with `THREE.LineLoop` when the orbit toggle is enabled.
 - Builds orbit lines from static `BodyOrbit` metadata, not from live planet-to-parent snapshot distances.
 - Creates renderer-owned body trails only when the `debug.uiToggles.showTrails` setting is enabled. The `simulation.trailSystem` setting controls trail retention length, not whether trails are visible.
+- Creates a renderer-owned selected-body transform gizmo through `frontend/js/rendering/transform-gizmo.js`. The gizmo displays axis arrows, two-axis plane squares, and a center free-drag sphere. Dragging previews the selected body position visually in Three.js; releasing commits an absolute `positionM` vector through the backend mutation API.
 - Recreates meshes when scenario metadata changes.
 - Uses a run-token guarded animation loop so stale async backend calls cannot restart rendering after the simulation screen has stopped.
 - Keeps rendering every animation frame while backend step requests run asynchronously, so camera movement and UI rendering stay responsive when paused or waiting on Python.
@@ -313,6 +315,8 @@ Physics remains in SI units in Python.
 
 The renderer centralizes physics-to-scene conversion through its display scale helper. Visual features such as trails, labels, vectors, orbit lines, picking, and camera focus should use the same conversion path instead of repeating the axis swap or square-root distance compression manually.
 
+The transform gizmo uses the inverse of the same display scale. Scene-space handle movement is converted back into an SI position vector before the backend commit, preserving the current nonlinear AU compression while keeping Python as the owner of physics state.
+
 Expected orbit guide lines are static visual references. They are generated when scenario metadata is applied, using `orbit.semiMajorAxisM`, `orbit.eccentricity`, orbital angles, and `orbit.centerM`. They should not be recalculated from the current snapshot each frame.
 
 ### Three.js Object Ownership
@@ -325,6 +329,7 @@ The renderer owns all Three.js objects it creates:
 - the primary point light and fill light;
 - the fly camera controller;
 - body label sprites and the selected-body marker;
+- selected-body transform gizmo meshes;
 - orbit line objects.
 
 When scenario metadata changes, existing body meshes, labels, and orbit lines are removed and disposed before new meshes are created. The material texture cache is also cleared at that boundary. When the renderer is destroyed, it stops the animation loop, removes event listeners, disposes body meshes, labels, orbit lines, the selection marker, the backdrop, cached textures, the WebGL renderer, and removes the canvas.
@@ -342,6 +347,7 @@ Current controls:
 - Inspector drawer: left-side collapsible drawer for selected-body stats, quick settings, body facts, and sandbox controls.
 - Facts: opened from the inspector lightbulb button. It displays backend-provided body facts plus derived runtime facts such as parent body, integration status, texture usage, and timestep.
 - Sandbox controls: opened from the inspector sliders button. It provides persistent multiplier sliders and raw SI value inputs for selected-body mass, radius, current distance from origin, and current speed. While dragging, radius and distance use renderer-only preview so the stat cards and visible mesh update immediately without mutating Python physics state. Slider release calls backend `update_body_parameters(...)`, custom number fields commit explicit SI values, Reset body calls backend `reset_body(...)`, and Reset system reloads the current scenario through `load_scenario(...)`. The frontend only renders returned metadata/snapshots as authoritative state.
+- Move body: toggles the renderer-owned transform gizmo for the selected body. Axis arrows constrain movement to one physical axis, square handles constrain movement to two-axis planes, and the center sphere free-drags in the camera-facing plane. The drag preview is visual-only; releasing the mouse sends `positionM` to Python through `update_body_parameters(...)`.
 - Focus: moves the camera near the selected body.
 - Labels: toggles renderer-owned label sprites and persists that toggle through the in-memory settings store.
 - Orbits: toggles renderer-owned circular orbit guide lines around each body's parent and persists that toggle through the in-memory settings store.
@@ -450,6 +456,7 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 - Keep camera behavior in frontend rendering code. Camera movement must not request or mutate backend physics state.
 - New Three.js object systems should provide a disposal path before they are attached to renderer lifecycle.
 - New visual systems should use the renderer's scene-position conversion helper rather than repeating meter-to-scene scaling and axis conversion.
+- Interactive body-position tools should follow the transform-gizmo pattern: preview in the renderer while dragging, then commit through the backend with validated SI values.
 - Orbit guide lines should use static orbit metadata from Python. Do not derive guide-line radius or shape from changing runtime snapshots.
 - Keep playback controls separate from graphics quality. Skybox, sphere, and lighting settings are visual-only; simulation speed belongs to the simulation control bar and should not be hidden inside graphics presets.
 - Avoid generic top-level helper names in frontend scripts. The app uses classic script tags, so shared names can collide across files.
@@ -475,6 +482,7 @@ $files = @(
   "frontend\js\rendering\materials.js",
   "frontend\js\rendering\space-backdrop.js",
   "frontend\js\rendering\fly-camera.js",
+  "frontend\js\rendering\transform-gizmo.js",
   "frontend\js\rendering\simulation-renderer.js",
   "frontend\js\screens\welcome.js",
   "frontend\js\screens\scenarios.js",

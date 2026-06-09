@@ -38,6 +38,17 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         onFlyInputStart: ensurePerspectiveFlyCamera,
         store,
     });
+    const transformGizmo = window.SolarSim.rendering.createTransformGizmoController({
+        commitPositionM: (bodyId, positionM) => updateBodyParameters(bodyId, { positionM }),
+        domElement: renderer.domElement,
+        getBodyMesh: (bodyId) => bodyMeshes.get(bodyId) || null,
+        getCamera: () => camera,
+        getSelectedBodyId: () => selectedBodyId,
+        onPositionPreview: emitBodyPositionPreview,
+        previewBodyParameters,
+        scale,
+        scene,
+    });
     const cameraOrbitTarget = new THREE.Vector3();
     const cameraOrbitOffset = new THREE.Vector3();
     const cameraSpherical = new THREE.Spherical();
@@ -130,6 +141,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         window.removeEventListener("solar-sim:language-changed", handleLanguageChanged);
         cameraController.destroy();
         disposeBodyMeshes();
+        transformGizmo.destroy();
         disposeSelectionMarker(selectionMarker);
         disposeBarycenterMarker(barycenterMarker);
         sceneObjects.backdrop.dispose();
@@ -191,13 +203,14 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
             return { ok: false, reason: "No body selected." };
         }
 
+        simulationStateToken += 1;
         const requestStateToken = simulationStateToken;
 
         try {
             const response = await window.SolarSim.backend.simulation.updateBodyParameters(bodyId, updates);
 
             if (requestStateToken !== simulationStateToken) {
-                return { ok: false, reason: "Body update superseded by a newer scenario request." };
+                return { ok: false, reason: "Body update superseded by a newer simulation state request." };
             }
 
             if (response?.scenario) {
@@ -223,13 +236,14 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
             return { ok: false, reason: "No body selected." };
         }
 
+        simulationStateToken += 1;
         const requestStateToken = simulationStateToken;
 
         try {
             const response = await window.SolarSim.backend.simulation.resetBody(bodyId);
 
             if (requestStateToken !== simulationStateToken) {
-                return { ok: false, reason: "Body reset superseded by a newer scenario request." };
+                return { ok: false, reason: "Body reset superseded by a newer simulation state request." };
             }
 
             if (response?.scenario) {
@@ -354,6 +368,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         cameraController.update(deltaS);
         updateTrackedCameraTarget();
         updateSelectionMarker(deltaS);
+        transformGizmo.update();
         updateBodyLabels();
         sceneObjects.backdrop.update(clock.getElapsedTime());
         renderer.render(scene, camera);
@@ -468,6 +483,10 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
 
     function getBodyRenderPositionM(body) {
         const preview = bodyVisualPreviews.get(body.id);
+
+        if (Array.isArray(preview?.positionM)) {
+            return preview.positionM;
+        }
 
         if (!Number.isFinite(preview?.distanceM)) {
             return body.positionM;
@@ -880,6 +899,17 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         });
     }
 
+    function emitBodyPositionPreview(bodyId, positionM) {
+        window.dispatchEvent(
+            new CustomEvent("solar-sim:body-position-preview", {
+                detail: {
+                    bodyId,
+                    positionM: Array.isArray(positionM) ? [...positionM] : null,
+                },
+            }),
+        );
+    }
+
     function resize() {
         const width = container.clientWidth || window.innerWidth;
         const height = container.clientHeight || window.innerHeight;
@@ -1001,6 +1031,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         selectBody,
         setCameraView,
         setFollowSelected,
+        setTransformGizmoVisible,
         setLabelsVisible,
         setOrbitLinesVisible,
         setPaused,
@@ -1111,6 +1142,8 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         disposeVectorLines(accelerationVectorLines);
         selectionMarker.visible = false;
         barycenterMarker.visible = false;
+        transformGizmo.clearDrag();
+        transformGizmo.update();
         lastTrailElapsedS = null;
     }
 
@@ -1169,6 +1202,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
 
         selectedBodyId = bodyId || null;
         updateSelectionMarker();
+        transformGizmo.update();
         notifySelectionChanged();
 
         return true;
@@ -1358,6 +1392,10 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     function setFollowSelected(value) {
         trackSelectedBody = Boolean(value);
         updateTrackedCameraTarget();
+    }
+
+    function setTransformGizmoVisible(value) {
+        transformGizmo.setVisible(value);
     }
 
     function togglePlayback() {
@@ -2269,6 +2307,23 @@ function createDisplayScale() {
                 .set(x, z, y)
                 .multiplyScalar(sceneDistance / distanceM);
         },
+        fromScenePosition(scenePosition) {
+            const sceneDistance = scenePosition.length();
+
+            if (sceneDistance === 0) {
+                return [0, 0, 0];
+            }
+
+            const distanceAu = auForSceneDistance(sceneDistance);
+            const distanceM = distanceAu * astronomicalUnitM;
+            const scalar = distanceM / sceneDistance;
+
+            return [
+                scenePosition.x * scalar,
+                scenePosition.z * scalar,
+                scenePosition.y * scalar,
+            ];
+        },
     };
 
     function sceneDistanceForAu(distanceAu) {
@@ -2281,6 +2336,20 @@ function createDisplayScale() {
                 distanceAu - innerSystemLinearLimitAu,
                 outerSystemDistanceExponent,
             ) * outerSystemSceneMultiplier;
+    }
+
+    function auForSceneDistance(sceneDistance) {
+        if (sceneDistance <= innerSystemSceneUnitsPerAu) {
+            return sceneDistance / innerSystemSceneUnitsPerAu;
+        }
+
+        const compressedOuterDistance = Math.max(
+            0,
+            (sceneDistance - innerSystemSceneUnitsPerAu) / outerSystemSceneMultiplier,
+        );
+
+        return innerSystemLinearLimitAu
+            + Math.pow(compressedOuterDistance, 1 / outerSystemDistanceExponent);
     }
 }
 
@@ -2339,6 +2408,7 @@ function normalizeBodyVisualPreview(values) {
     const preview = {};
     const radiusM = Number(values.radiusM);
     const distanceM = Number(values.distanceM);
+    const positionM = normalizeOptionalVector3M(values.positionM);
 
     if (Number.isFinite(radiusM) && radiusM > 0) {
         preview.radiusM = radiusM;
@@ -2348,7 +2418,25 @@ function normalizeBodyVisualPreview(values) {
         preview.distanceM = distanceM;
     }
 
+    if (positionM) {
+        preview.positionM = positionM;
+    }
+
     return Object.keys(preview).length > 0 ? preview : null;
+}
+
+function normalizeOptionalVector3M(values) {
+    if (!Array.isArray(values) || values.length < 3) {
+        return null;
+    }
+
+    const vector = [
+        Number(values[0]),
+        Number(values[1]),
+        Number(values[2]),
+    ];
+
+    return vector.every(Number.isFinite) ? vector : null;
 }
 
 function scaleVectorMagnitudeM(values, magnitude) {
