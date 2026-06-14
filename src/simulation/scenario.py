@@ -232,6 +232,7 @@ def create_custom_solar_system(
     planet_names: tuple[str, ...],
     include_sun: bool = True,
 ) -> list[SimBody]:
+
     planets = create_planets_for_names(planet_names)
 
     if not include_sun:

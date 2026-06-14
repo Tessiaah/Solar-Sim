@@ -36,8 +36,8 @@ const STAR_FIELD_CONFIGS = [
     {
         count: 6200,
         radius: 4600,
-        size: 1.7,
-        opacity: 0.98,
+        size: 1.95,
+        opacity: 1,
         colors: ["#ffffff", "#edf5ff", "#fff7df"],
         rotationSpeed: { x: 0.0018, y: 0.0036, z: -0.0012 },
     },
@@ -45,7 +45,7 @@ const STAR_FIELD_CONFIGS = [
         count: 2600,
         radius: 4100,
         size: 2.45,
-        opacity: 0.86,
+        opacity: 0.92,
         colors: ["#d8f4ff", "#ffe2b8", "#f0e8ff"],
         rotationSpeed: { x: -0.0024, y: 0.0051, z: 0.0021 },
     },
@@ -568,8 +568,8 @@ function createPointStarTexture() {
 
     gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
     gradient.addColorStop(0.16, "rgba(255, 255, 255, 0.96)");
-    gradient.addColorStop(0.46, "rgba(255, 255, 255, 0.42)");
-    gradient.addColorStop(0.78, "rgba(255, 255, 255, 0.12)");
+    gradient.addColorStop(0.46, "rgba(255, 255, 255, 0.56)");
+    gradient.addColorStop(0.78, "rgba(255, 255, 255, 0.18)");
     gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
 
     context.fillStyle = gradient;

@@ -180,11 +180,21 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
     });
 
     window.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape" || !root.classList.contains("screen-active")) {
+        if (!root.classList.contains("screen-active")) {
             return;
         }
 
         if (isSimulationEditableTarget(event.target)) {
+            return;
+        }
+
+        if (isTrackSelectedKey(event)) {
+            event.preventDefault();
+            toggleTrackSelected(controls, renderer);
+            return;
+        }
+
+        if (event.key !== "Escape") {
             return;
         }
 
@@ -323,7 +333,7 @@ function bindSimulationControls({ controls, renderer, store }) {
     });
 
     controls.trackToggle?.addEventListener("change", () => {
-        renderer.setFollowSelected(controls.trackToggle.checked);
+        setTrackSelected(controls, renderer, controls.trackToggle.checked);
     });
 }
 
@@ -478,7 +488,11 @@ function bindCameraSettingsControls(cameraSettings, store) {
 
         configureCameraSettingInput(input, control);
         input.addEventListener("input", () => {
-            store.setValue("camera", settingKey, parseCameraSettingValue(input.value, control));
+            const nextValue = parseCameraSettingValue(input.value, control);
+
+            input.value = nextValue;
+            updateCameraSettingOutput(valuesByKey.get(settingKey), nextValue, control);
+            store.setValue("camera", settingKey, nextValue);
         });
     });
 
@@ -670,6 +684,29 @@ function releaseOrientationPointer(element, pointerId) {
 function isSimulationEditableTarget(target) {
     return target instanceof Element
         && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function isTrackSelectedKey(event) {
+    return event.code === "KeyF"
+        && !event.ctrlKey
+        && !event.altKey
+        && !event.metaKey;
+}
+
+function toggleTrackSelected(controls, renderer) {
+    const nextValue = !(controls.trackToggle?.checked ?? false);
+
+    setTrackSelected(controls, renderer, nextValue);
+}
+
+function setTrackSelected(controls, renderer, enabled) {
+    const isEnabled = Boolean(enabled);
+
+    if (controls.trackToggle) {
+        controls.trackToggle.checked = isEnabled;
+    }
+
+    renderer.setFollowSelected(isEnabled);
 }
 
 function configureCameraSettingInput(input, control) {
@@ -1253,7 +1290,6 @@ function setTranslatedAttribute(element, attribute, key) {
 
 function runSimulationCommand(command, renderer) {
     const handlers = {
-        "focus-selected": () => renderer.focusSelectedBody(),
         reset: () => renderer.resetScenario(),
         "step-once": () => renderer.stepOnce(),
         "toggle-playback": () => renderer.togglePlayback(),

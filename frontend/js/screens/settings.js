@@ -18,21 +18,37 @@ window.SolarSim.screens.initSettingsScreen = function initSettingsScreen({ root,
         });
     });
 
+    window.addEventListener("keydown", (event) => {
+        if (!isEscapeKey(event) || !isSettingsScreenActive(root, router)) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        router.goTo(getSettingsBackRoute(backButton));
+    }, true);
+
     renderCategoryNav(categoryNav, schema, activeCategory, setActiveCategory);
 
     renderSettingsForm(form, schema, store);
     showActiveSection(form, activeCategory);
 
-    window.SolarSim.settings.setMomentumStatus = function setMomentumStatus({ violated, magnitude }) {
-        const warning = root.querySelector("[data-momentum-warning]");
+    window.SolarSim.settings.setMomentumStatus = function setMomentumStatus({ magnitude }) {
+        const status = root.querySelector("[data-momentum-status]");
 
-        if (!warning) {
+        if (!status) {
             return;
         }
 
-        warning.classList.toggle("is-visible", Boolean(violated));
-        warning.textContent = violated
-            ? `Momentum warning: total momentum magnitude is ${magnitude}. Expected near zero.`
+        const hasMagnitude = magnitude !== undefined && magnitude !== null && magnitude !== "";
+
+        status.classList.toggle("is-visible", hasMagnitude);
+        status.textContent = hasMagnitude
+            ? window.SolarSim.format.text(
+                "settings.momentumStatus",
+                { magnitude },
+                `Current total system momentum: ${magnitude}`,
+            )
             : "";
     };
 
@@ -48,14 +64,20 @@ window.SolarSim.screens.initSettingsScreen = function initSettingsScreen({ root,
         showActiveSection(form, activeCategory);
     });
 
+    window.addEventListener("solar-sim:settings-changed", () => {
+        syncSettingsForm(form, schema, store);
+    });
+
+    window.addEventListener("solar-sim:settings-reset", () => {
+        syncSettingsForm(form, schema, store);
+    });
+
     window.addEventListener("solar-sim:navigate", (event) => {
         if (event.detail?.screenName !== "settings" || !backButton) {
             return;
         }
 
-        backButton.dataset.route = event.detail.previousScreen === "simulation"
-            ? "simulation"
-            : "welcome";
+        backButton.dataset.route = getSettingsReturnRoute(event.detail.previousScreen);
     });
 };
 
@@ -100,16 +122,17 @@ function renderSettingsForm(form, schema, store) {
         section.append(header, grid);
 
         if (categoryKey === "debug") {
-            const warning = document.createElement("p");
-            warning.className = "settings-warning";
-            warning.dataset.momentumWarning = "true";
-            section.append(warning);
+            const momentumStatus = document.createElement("p");
+            momentumStatus.className = "settings-status";
+            momentumStatus.dataset.momentumStatus = "true";
+            section.append(momentumStatus);
         }
 
         return section;
     });
 
     form.replaceChildren(...sections);
+    syncSettingsForm(form, schema, store);
 }
 
 function createControl(categoryKey, control, store) {
@@ -179,7 +202,6 @@ function createSegmentedControl(categoryKey, control, currentValue, store) {
         button.classList.toggle("is-selected", option.value === currentValue);
         button.addEventListener("click", () => {
             store.setValue(categoryKey, control.key, option.value);
-            updateSelectedButtons(group, option.value);
         });
         button.dataset.value = option.value;
         group.append(button);
@@ -215,6 +237,7 @@ function createBooleanGroup(categoryKey, control, currentValue, store) {
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = translateOption(categoryKey, control, option);
+        button.dataset.value = option.value;
         button.setAttribute("aria-pressed", String(Boolean(currentValue[option.value])));
         button.addEventListener("click", () => {
             const nextGroupValue = {
@@ -223,7 +246,6 @@ function createBooleanGroup(categoryKey, control, currentValue, store) {
             };
 
             store.setValue(categoryKey, control.key, nextGroupValue);
-            button.setAttribute("aria-pressed", String(nextGroupValue[option.value]));
         });
         row.append(button);
     });
@@ -243,11 +265,13 @@ function createRangeControl(categoryKey, control, currentValue, store) {
     input.step = control.step;
     input.value = currentValue;
     value.className = "range-value";
-    value.textContent = currentValue;
+    value.textContent = formatSettingNumber(currentValue, control);
 
     input.addEventListener("input", () => {
-        const nextValue = Number(input.value);
-        value.textContent = nextValue.toFixed(1);
+        const nextValue = parseSettingNumber(input.value, control);
+
+        input.value = nextValue;
+        value.textContent = formatSettingNumber(nextValue, control);
         store.setValue(categoryKey, control.key, nextValue);
     });
 
@@ -265,7 +289,10 @@ function createNumberControl(categoryKey, control, currentValue, store) {
     input.step = control.step;
     input.value = currentValue;
     input.addEventListener("change", () => {
-        store.setValue(categoryKey, control.key, Number(input.value));
+        const nextValue = parseSettingNumber(input.value, control);
+
+        input.value = nextValue;
+        store.setValue(categoryKey, control.key, nextValue);
     });
 
     row.append(document.createElement("span"), input);
@@ -285,10 +312,138 @@ function updateSelectedButtons(group, selectedValue) {
     });
 }
 
+function syncSettingsForm(form, schema, store) {
+    if (!form || !schema || !store?.getCategory) {
+        return;
+    }
+
+    Object.entries(schema).forEach(([categoryKey, category]) => {
+        const categoryState = store.getCategory(categoryKey);
+
+        category.controls.forEach((control) => {
+            const wrapper = findSettingWrapper(form, categoryKey, control.key);
+
+            if (!wrapper) {
+                return;
+            }
+
+            syncSettingControl(wrapper, control, categoryState?.[control.key]);
+        });
+    });
+}
+
+function findSettingWrapper(form, categoryKey, settingKey) {
+    const settingPath = `${categoryKey}.${settingKey}`;
+
+    return Array.from(form.querySelectorAll("[data-setting]"))
+        .find((wrapper) => wrapper.dataset.setting === settingPath) || null;
+}
+
+function syncSettingControl(wrapper, control, currentValue) {
+    if (control.type === "select") {
+        updateSelectedButtons(wrapper, currentValue);
+        return;
+    }
+
+    if (control.type === "boolean") {
+        const button = wrapper.querySelector("button");
+
+        if (!button) {
+            return;
+        }
+
+        button.setAttribute("aria-pressed", String(Boolean(currentValue)));
+        button.textContent = translateBooleanState(Boolean(currentValue));
+        return;
+    }
+
+    if (control.type === "booleanGroup") {
+        wrapper.querySelectorAll("button[data-value]").forEach((button) => {
+            button.setAttribute("aria-pressed", String(Boolean(currentValue?.[button.dataset.value])));
+        });
+        return;
+    }
+
+    if (control.type === "range") {
+        const input = wrapper.querySelector('input[type="range"]');
+        const output = wrapper.querySelector("output");
+        const value = parseSettingNumber(currentValue, control);
+
+        if (input) {
+            input.value = value;
+        }
+
+        if (output) {
+            output.textContent = formatSettingNumber(value, control);
+        }
+        return;
+    }
+
+    if (control.type === "number") {
+        const input = wrapper.querySelector('input[type="number"]');
+
+        if (input) {
+            input.value = parseSettingNumber(currentValue, control);
+        }
+        return;
+    }
+
+    if (control.type === "readonly") {
+        const value = wrapper.querySelector(".readonly-value");
+
+        if (value) {
+            value.textContent = translateReadonlyValue(currentValue);
+        }
+    }
+}
+
+function parseSettingNumber(rawValue, control) {
+    const fallback = Number(control.defaultValue) || 0;
+    const numberValue = Number(rawValue);
+    const safeValue = Number.isFinite(numberValue) ? numberValue : fallback;
+    const min = Number.isFinite(control.min) ? control.min : safeValue;
+    const max = Number.isFinite(control.max) ? control.max : safeValue;
+
+    return Math.min(max, Math.max(min, safeValue));
+}
+
+function formatSettingNumber(value, control) {
+    const numberValue = Number(value);
+    const safeValue = Number.isFinite(numberValue) ? numberValue : Number(control.defaultValue) || 0;
+    const step = Number(control.step);
+    const fractionDigits = step > 0 && step < 1
+        ? String(step).split(".")[1]?.length || 0
+        : 0;
+
+    return safeValue.toFixed(fractionDigits);
+}
+
 function showActiveSection(form, categoryKey) {
     form.querySelectorAll("[data-category-section]").forEach((section) => {
         section.classList.toggle("is-active", section.dataset.categorySection === categoryKey);
     });
+}
+
+function getSettingsBackRoute(backButton) {
+    return backButton?.dataset.route || "welcome";
+}
+
+function getSettingsReturnRoute(previousScreen) {
+    return previousScreen && previousScreen !== "settings"
+        ? previousScreen
+        : "welcome";
+}
+
+function isEscapeKey(event) {
+    return event.key === "Escape"
+        || event.key === "Esc"
+        || event.code === "Escape"
+        || event.keyCode === 27;
+}
+
+function isSettingsScreenActive(root, router) {
+    return root.classList.contains("screen-active")
+        || router?.getCurrentScreen?.() === "settings";
 }
 
 function translateCategory(categoryKey, category, fieldName) {

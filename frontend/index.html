@@ -23,6 +23,7 @@
         <script defer src="./js/rendering/materials.js"></script>
         <script defer src="./js/rendering/space-backdrop.js"></script>
         <script defer src="./js/rendering/fly-camera.js"></script>
+        <script defer src="./js/rendering/viewport-camera.js"></script>
         <script defer src="./js/rendering/transform-gizmo.js"></script>
         <script defer src="./js/rendering/simulation-renderer.js"></script>
         <script defer src="./js/screens/welcome.js"></script>
@@ -359,13 +360,38 @@
                             <select data-simulation-body-select aria-label="Select body" data-i18n-aria-label="simulation.selectBody"></select>
                             <div class="body-panel-actions" aria-label="Body menus" data-i18n-aria-label="simulation.bodyMenus">
                                 <button type="button" class="simulation-icon-button" data-body-panel-toggle="facts" aria-pressed="false" aria-label="Open facts" data-i18n-aria-label="simulation.openFacts" title="Facts" data-i18n-title="simulation.facts">
-                                    <span class="app-icon app-icon-lightbulb" aria-hidden="true"></span>
+                                    <svg class="simulation-panel-icon simulation-panel-icon-facts" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <path d="M9 18h6"></path>
+                                        <path d="M10 22h4"></path>
+                                        <path d="M8.5 14.6c-1.35-1.07-2.2-2.72-2.2-4.56A5.7 5.7 0 0 1 12 4.35a5.7 5.7 0 0 1 5.7 5.69c0 1.84-.85 3.49-2.2 4.56-.58.46-.9 1.03-.9 1.76v.64H9.4v-.64c0-.73-.32-1.3-.9-1.76Z"></path>
+                                        <path d="M12 1.9v1.15"></path>
+                                        <path d="m4.9 4.9.82.82"></path>
+                                        <path d="m19.1 4.9-.82.82"></path>
+                                    </svg>
                                 </button>
                                 <button type="button" class="simulation-icon-button" data-body-panel-toggle="sandbox" aria-pressed="false" aria-label="Open sandbox controls" data-i18n-aria-label="simulation.openSandbox" title="Sandbox" data-i18n-title="simulation.sandbox">
-                                    <span class="app-icon app-icon-sliders" aria-hidden="true"></span>
+                                    <svg class="simulation-panel-icon simulation-panel-icon-sandbox" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <path d="M4 7h7"></path>
+                                        <path d="M15 7h5"></path>
+                                        <path d="M4 12h3"></path>
+                                        <path d="M11 12h9"></path>
+                                        <path d="M4 17h10"></path>
+                                        <path d="M18 17h2"></path>
+                                        <circle cx="13" cy="7" r="2"></circle>
+                                        <circle cx="9" cy="12" r="2"></circle>
+                                        <circle cx="16" cy="17" r="2"></circle>
+                                    </svg>
                                 </button>
                                 <button type="button" class="simulation-icon-button" data-body-transform-toggle aria-pressed="false" aria-label="Show transform gizmo" data-i18n-aria-label="simulation.showTransformGizmo" title="Move body" data-i18n-title="simulation.transformGizmo">
-                                    <span class="app-icon app-icon-transform" aria-hidden="true"></span>
+                                    <svg class="simulation-panel-icon simulation-panel-icon-transform" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <circle cx="12" cy="12" r="1.8"></circle>
+                                        <path d="M12 12h7"></path>
+                                        <path d="m16.6 8.8 2.9 3.2-2.9 3.2"></path>
+                                        <path d="M12 12v-7"></path>
+                                        <path d="m8.8 7.4 3.2-2.9 3.2 2.9"></path>
+                                        <path d="M12 12 6.8 17.2"></path>
+                                        <path d="M5.3 13.2v5.5h5.5"></path>
+                                    </svg>
                                 </button>
                             </div>
                         </div>
@@ -390,7 +416,6 @@
                         </dl>
 
                         <div class="quick-controls" aria-label="Quick settings" data-i18n-aria-label="simulation.quickSettings">
-                            <button type="button" data-simulation-command="focus-selected" data-i18n="simulation.focus">Focus</button>
                             <label>
                                 <input type="checkbox" data-simulation-toggle="labels" checked>
                                 <span data-i18n="simulation.labels">Labels</span>

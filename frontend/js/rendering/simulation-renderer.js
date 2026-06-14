@@ -32,7 +32,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     orthographicCamera.position.copy(perspectiveCamera.position);
     orthographicCamera.quaternion.copy(perspectiveCamera.quaternion);
     orthographicCamera.up.copy(perspectiveCamera.up);
-    const cameraController = window.SolarSim.rendering.createFlyCameraController({
+    const cameraController = window.SolarSim.rendering.createViewportCameraController({
         camera,
         domElement: renderer.domElement,
         onFlyInputStart: ensurePerspectiveFlyCamera,
@@ -1014,7 +1014,6 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
 
     return {
         destroy,
-        focusSelectedBody,
         getCameraOrientation,
         getPlaybackState,
         getSelectedBodyId,
@@ -1222,23 +1221,6 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
                 camera.quaternion.w,
             ],
         };
-    }
-
-    function focusSelectedBody() {
-        const mesh = bodyMeshes.get(selectedBodyId);
-
-        if (!mesh) {
-            return false;
-        }
-
-        const radius = getMeshRadius(mesh);
-        const distance = Math.max(radius * 8, 34);
-
-        cameraController.focusOn(mesh.position, distance);
-        if (camera.isOrthographicCamera) {
-            setOrthographicViewSize(Math.max(radius * 18, 80));
-        }
-        return true;
     }
 
     function setCameraView(viewName) {
