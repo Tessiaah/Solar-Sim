@@ -462,6 +462,35 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 - Avoid generic top-level helper names in frontend scripts. The app uses classic script tags, so shared names can collide across files.
 - Keep translatable UI copy in `frontend/js/i18n/translations.js`; body/scenario factories may choose fact keys, but they should not duplicate translated prose.
 
+
+## Main Source Files
+
+- `main.py`: app entrypoint.
+- `src/app/launcher.py`: PyWebView launch.
+- `src/app/api.py`: JavaScript-facing API aggregator.
+- `src/app/bridge.py`: host-window API.
+- `src/simulation/body.py`: simulation data types.
+- `src/simulation/physics.py`: gravity, diagnostics, Velocity Verlet.
+- `src/simulation/scenario.py`: built-in and custom scenario body factories.
+- `src/simulation/runtime.py`: simulation runtime, stepping, snapshots, mutations, scenario registry.
+- `src/data/constants.py`: physical constants and configured body constants.
+- `frontend/index.html`: static frontend shell.
+- `frontend/js/app.js`: frontend initialization.
+- `frontend/js/api/backend-api.js`: JavaScript backend API wrapper.
+- `frontend/js/screens/scenarios.js`: scenario builder/list.
+- `frontend/js/screens/settings.js`: settings screen.
+- `frontend/js/screens/simulation.js`: simulation screen UI bindings.
+- `frontend/js/settings/settings-schema.js`: runtime settings schema.
+- `frontend/js/settings/settings-store.js`: in-memory settings store.
+- `frontend/js/settings/settings-effects.js`: settings effects and diagnostics overlay.
+- `frontend/js/i18n/translations.js`: English/Portuguese text.
+- `frontend/js/rendering/simulation-renderer.js`: Three.js simulation renderer.
+- `frontend/js/rendering/materials.js`: materials and texture handling.
+- `frontend/js/rendering/space-backdrop.js`: starfield/space backdrop.
+- `frontend/js/rendering/fly-camera.js`: WASD camera mode.
+- `frontend/js/rendering/viewport-camera.js`: camera mode controller and Blender-style orbit mode.
+- `frontend/js/rendering/transform-gizmo.js`: selected-body move gizmo.
+
 ## JavaScript Checks
 
 A local portable Node.js install can be kept under `.tools/node` for syntax checks without requiring a system-wide Node installation. The current workspace uses Node `v24.16.0`.
