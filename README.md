@@ -71,6 +71,9 @@ Custom scenario support:
 - Custom planet choices are submitted as stable body ids from the frontend, then translated back to canonical Python planet names in `src/simulation/scenario.py`.
 - When `include_sun` is true, the Sun is included as the central body and receives a momentum-balancing velocity based only on the selected planets.
 - When `include_sun` is false, Python reuses the selected planet definitions/materials but removes Sun-parent and orbit-guide metadata. It does not inherit the planets' original Sun-orbit velocities. Instead, it creates planet-only initial conditions: one selected body is placed at rest at the origin, two selected bodies are initialized as a barycentric binary, and larger selections are arranged as a compact barycentric multi-body system with tangential velocities based on the selected masses. This avoids pretending the planets orbit a missing Sun and prevents the system from simply flying forward due to inherited Solar System motion.
+- Custom scenario recipes are persisted as JSON under `%APPDATA%\Solar Sim\custom_scenarios.json`.
+- Persisted recipes store only the custom scenario id, name, selected body ids, and whether the Sun is included. They do not store sandbox-edited masses, radii, positions, velocities, elapsed time, or live physics state.
+- When the app starts, Python loads the saved recipes and recreates runtime scenario factories from those recipes, so every launch/reset starts from the clean default scenario state.
 
 Runtime orchestration lives in `src/simulation/runtime.py`.
 
@@ -89,7 +92,7 @@ SCENARIOS = {
 
 Do not put per-body colors, names, materials, or textures in `SCENARIOS`. Those belong on the body definitions created by the scenario factory.
 
-Runtime-created custom scenarios are stored in memory by `SimulationRuntime`, matching the current in-memory settings model. Each custom scenario stores a generated id, display name, selected body ids, whether the Sun is included, and a factory closure that recreates a fresh body list when the scenario is loaded or reset.
+Custom scenarios are represented in memory by `SimulationRuntime` and persisted as recipes by `CustomScenarioStorage`. Each runtime custom scenario stores a generated id, display name, selected body ids, whether the Sun is included, and a factory closure that recreates a fresh body list when the scenario is loaded or reset. Only the recipe is written to disk; the factory is rebuilt when recipes are loaded.
 
 ## Frontend
 
@@ -133,6 +136,7 @@ Simulation methods:
 - `list_scenarios()`
 - `list_scenario_bodies()`
 - `create_custom_scenario(config)`
+- `delete_custom_scenario(scenario_id)`
 - `update_body_parameters(body_id, updates)`
 - `reset_body(body_id)`
 - `load_scenario(scenario_id="sun-earth")`
@@ -209,6 +213,8 @@ Scenario metadata also includes:
 The renderer caches static metadata and uses dynamic snapshots only to update mesh positions. Body facts are translation keys when they are app-authored facts; user/authored scenarios may still provide plain strings as a fallback.
 
 `update_body_parameters(body_id, updates)` is the backend-owned sandbox mutation path for selected-body tuning. The frontend may request new numeric values for `massKg`, `radiusM`, `distanceM`, `speedMS`, and `positionM`, but it must do so through this API. Python validates the numbers, updates the `SimBody` definition/state, and returns fresh scenario metadata plus a fresh dynamic snapshot. The frontend then refreshes the renderer from that returned data instead of directly changing physics state.
+
+Sandbox scalar values are bounded against the current scenario's clean initial state before Python mutates the live body. Current limits match the UI ranges: mass and radius must stay within `0.1x` to `10x`, while distance and speed must stay within `0x` to `4x`. This prevents typed raw values such as an unrealistic `1e40 kg` Sun from creating timestep-scale numerical blowups.
 
 `reset_body(body_id)` restores one live body from a freshly created copy of the current scenario. It resets that body's definition, position vector, and velocity vector. It does not rewind elapsed time or undo any gravitational effects already propagated to other bodies. Use the system reset path, implemented by reloading the current scenario through `load_scenario(...)`, for a physically clean full reset.
 
@@ -374,7 +380,8 @@ Current behavior:
 - Loads the planet catalog from `list_scenario_bodies()` instead of hardcoding planet choices in JavaScript.
 - Lets the user choose a subset of planets and submit a custom scenario name.
 - Lets the user choose whether the custom system includes the Sun as the central body.
-- Calls `create_custom_scenario({ name, bodyIds, includeSun })`; Python validates the stable body ids, creates an in-memory scenario factory, loads that scenario, and returns the initial snapshot/metadata.
+- Calls `create_custom_scenario({ name, bodyIds, includeSun })`; Python validates the stable body ids, creates and persists a scenario recipe, builds an in-memory scenario factory, loads that scenario, and returns the initial snapshot/metadata.
+- Lets the user delete persisted custom scenarios. Built-in scenarios are not deletable.
 - Dispatches `solar-sim:launch-scenario` with the requested scenario id before routing to the simulation screen.
 - The simulation screen consumes that event and calls `renderer.loadScenario(scenarioId)`, so the existing renderer lifecycle handles metadata replacement, mesh disposal/recreation, snapshot loading, and playback restart.
 

@@ -4,13 +4,18 @@ import numpy as np
 
 from src.data.constants import DAY_S
 from src.simulation.physics import compute_system_diagnostics, velocity_verlet
-from src.simulation.ids import body_id_from_name
+from src.simulation.ids import body_id_from_name, normalize_body_ids
 from src.simulation.scenario import (
     create_custom_solar_system,
     create_scenario_body_catalog,
     create_solar_system,
     create_sun_earth_system,
     get_planet_name_from_id,
+)
+from src.simulation.scenario_storage import (
+    CustomScenarioRecipe,
+    CustomScenarioStorage,
+    get_custom_scenario_counter,
 )
 
 
@@ -31,13 +36,15 @@ SCENARIOS = {
 
 
 class SimulationRuntime:
-    def __init__(self) -> None:
+    def __init__(self, scenario_storage: CustomScenarioStorage | None = None) -> None:
         self._bodies = []
         self._scenario_id = None
         self._custom_scenarios = {}
         self._custom_scenario_counter = 0
+        self._scenario_storage = scenario_storage or CustomScenarioStorage()
         self._elapsed_s = 0.0
         self._dt_s = DAY_S / 24.0
+        self._load_custom_scenarios()
         self.load_scenario("solar-system")
 
     def list_scenarios(self) -> dict:
@@ -73,41 +80,62 @@ class SimulationRuntime:
     def create_custom_scenario(self, config: dict | None = None) -> dict:
         safe_config = config if isinstance(config, dict) else {}
         selected_body_ids = normalize_body_ids(safe_config.get("bodyIds"))
-        selected_planet_names = tuple(
-            get_planet_name_from_id(body_id)
-            for body_id in selected_body_ids
+        previous_counter = self._custom_scenario_counter
+        scenario_id = self._next_custom_scenario_id()
+        scenario_name = normalize_custom_scenario_name(
+            safe_config.get("name"),
+            self._custom_scenario_counter,
+        )
+        include_sun = normalize_include_sun(safe_config.get("includeSun"))
+        scenario = create_custom_scenario_entry(
+            scenario_id,
+            scenario_name,
+            selected_body_ids,
+            include_sun,
         )
 
-        if not selected_planet_names or any(name is None for name in selected_planet_names):
+        if scenario is None:
+            self._custom_scenario_counter = previous_counter
             return {
                 "ok": False,
                 "reason": "Select at least one supported planet.",
             }
 
-        self._custom_scenario_counter += 1
-        scenario_id = f"custom-{self._custom_scenario_counter}"
-        scenario_name = normalize_custom_scenario_name(
-            safe_config.get("name"),
-            self._custom_scenario_counter,
-        )
-        selected_names = tuple(name for name in selected_planet_names if name is not None)
-        selected_ids = [body_id_from_name(name) for name in selected_names]
-        include_sun = normalize_include_sun(safe_config.get("includeSun"))
+        self._custom_scenarios[scenario_id] = scenario
 
-        self._custom_scenarios[scenario_id] = {
-            "id": scenario_id,
-            "name": scenario_name,
-            "description": build_custom_scenario_description(selected_names, include_sun),
-            "factory": (
-                lambda selected_names=selected_names, include_sun=include_sun:
-                    create_custom_solar_system(selected_names, include_sun)
-            ),
-            "custom": True,
-            "includeSun": include_sun,
-            "selectedBodyIds": selected_ids,
-        }
+        try:
+            self._persist_custom_scenarios()
+        except OSError:
+            del self._custom_scenarios[scenario_id]
+            self._custom_scenario_counter = previous_counter
+            return {
+                "ok": False,
+                "reason": "Could not save custom scenario.",
+            }
 
         return self.load_scenario(scenario_id)
+
+    def delete_custom_scenario(self, scenario_id: str) -> dict:
+        safe_scenario_id = normalize_custom_scenario_id(scenario_id)
+
+        if not safe_scenario_id or safe_scenario_id not in self._custom_scenarios:
+            return {"ok": False, "reason": f"Unknown custom scenario: {scenario_id}"}
+
+        scenario = self._custom_scenarios.pop(safe_scenario_id)
+
+        try:
+            self._persist_custom_scenarios()
+        except OSError:
+            self._custom_scenarios[safe_scenario_id] = scenario
+            return {
+                "ok": False,
+                "reason": "Could not delete custom scenario.",
+            }
+
+        if self._scenario_id == safe_scenario_id:
+            self.load_scenario("solar-system")
+
+        return self.list_scenarios()
 
     def update_body_parameters(self, body_id: str, updates: dict | None = None) -> dict:
         body = self._find_body(body_id)
@@ -258,6 +286,55 @@ class SimulationRuntime:
 
         return scenario["factory"]()
 
+    def _load_custom_scenarios(self) -> None:
+        recipes, last_counter = self._scenario_storage.load()
+
+        self._custom_scenario_counter = max(self._custom_scenario_counter, last_counter)
+
+        for recipe in recipes:
+            scenario_id = normalize_custom_scenario_id(recipe.id)
+
+            if not scenario_id or scenario_id in SCENARIOS or scenario_id in self._custom_scenarios:
+                continue
+
+            scenario = create_custom_scenario_entry(
+                scenario_id,
+                recipe.name,
+                list(recipe.selected_body_ids),
+                recipe.include_sun,
+            )
+
+            if scenario is None:
+                continue
+
+            self._custom_scenarios[scenario_id] = scenario
+            self._custom_scenario_counter = max(
+                self._custom_scenario_counter,
+                get_custom_scenario_counter(scenario_id),
+            )
+
+    def _persist_custom_scenarios(self) -> None:
+        self._scenario_storage.save(
+            (
+                CustomScenarioRecipe(
+                    id=scenario["id"],
+                    name=scenario["name"],
+                    selected_body_ids=tuple(scenario.get("selectedBodyIds", [])),
+                    include_sun=bool(scenario.get("includeSun", True)),
+                )
+                for scenario in self._custom_scenarios.values()
+            ),
+            self._custom_scenario_counter,
+        )
+
+    def _next_custom_scenario_id(self) -> str:
+        while True:
+            self._custom_scenario_counter += 1
+            scenario_id = f"custom-{self._custom_scenario_counter}"
+
+            if scenario_id not in SCENARIOS and scenario_id not in self._custom_scenarios:
+                return scenario_id
+
 
 def serialize_body_metadata(body) -> dict:
     definition = body.definition
@@ -374,24 +451,6 @@ def remove_none_values(values: dict) -> dict:
     }
 
 
-def normalize_body_ids(value) -> list[str]:
-    if not isinstance(value, list):
-        return []
-
-    normalized_ids = []
-
-    for item in value:
-        if not isinstance(item, str):
-            continue
-
-        body_id = item.strip().lower()
-
-        if body_id and body_id not in normalized_ids:
-            normalized_ids.append(body_id)
-
-    return normalized_ids
-
-
 def normalize_custom_scenario_name(value, counter: int) -> str:
     if isinstance(value, str):
         normalized = " ".join(value.strip().split())
@@ -400,6 +459,15 @@ def normalize_custom_scenario_name(value, counter: int) -> str:
             return normalized[:80]
 
     return f"Custom System {counter}"
+
+
+def normalize_custom_scenario_id(value) -> str:
+    scenario_id = str(value or "").strip().lower()
+
+    if get_custom_scenario_counter(scenario_id) <= 0:
+        return ""
+
+    return scenario_id
 
 
 def normalize_include_sun(value) -> bool:
@@ -492,3 +560,34 @@ def build_custom_scenario_description(
     prefix = "Custom system with Sun, " if include_sun else "Sunless custom system with "
 
     return prefix + ", ".join(planet_names) + "."
+
+
+def create_custom_scenario_entry(
+    scenario_id: str,
+    scenario_name: str,
+    selected_body_ids: list[str],
+    include_sun: bool,
+) -> dict | None:
+    selected_planet_names = tuple(
+        get_planet_name_from_id(body_id)
+        for body_id in normalize_body_ids(selected_body_ids)
+    )
+
+    if not selected_planet_names or any(name is None for name in selected_planet_names):
+        return None
+
+    selected_names = tuple(name for name in selected_planet_names if name is not None)
+    selected_ids = [body_id_from_name(name) for name in selected_names]
+
+    return {
+        "id": scenario_id,
+        "name": scenario_name,
+        "description": build_custom_scenario_description(selected_names, include_sun),
+        "factory": (
+            lambda selected_names=selected_names, include_sun=include_sun:
+                create_custom_solar_system(selected_names, include_sun)
+        ),
+        "custom": True,
+        "includeSun": include_sun,
+        "selectedBodyIds": selected_ids,
+    }

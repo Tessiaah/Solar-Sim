@@ -18,8 +18,9 @@ This file lists what a user can currently do and see in Solar Sim, plus the phys
 - View the available runnable scenarios.
 - Start the built-in Sun and Earth scenario.
 - Start the built-in Solar System scenario.
-- View runtime-created custom scenarios during the current session.
+- View saved custom scenarios across app launches.
 - Create a custom scenario.
+- Delete saved custom scenarios.
 - Select individual planets for a custom scenario:
   - Mercury;
   - Venus;

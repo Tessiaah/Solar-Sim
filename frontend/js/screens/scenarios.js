@@ -125,7 +125,7 @@ function renderScenarioList(state, controls) {
     const fragment = document.createDocumentFragment();
 
     state.scenarios.forEach((scenario) => {
-        fragment.append(createScenarioListItem(scenario, state.router));
+        fragment.append(createScenarioListItem(scenario, state, controls));
     });
 
     if (state.scenarios.length === 0) {
@@ -139,23 +139,39 @@ function renderScenarioList(state, controls) {
     controls.scenarioList.replaceChildren(fragment);
 }
 
-function createScenarioListItem(scenario, router) {
+function createScenarioListItem(scenario, state, controls) {
     const item = document.createElement("article");
     const title = document.createElement("h3");
     const description = document.createElement("p");
+    const actions = document.createElement("div");
     const startButton = document.createElement("button");
 
     item.className = "scenario-list-item";
+    actions.className = "scenario-list-actions";
     title.textContent = window.SolarSim.format.scenarioName(scenario);
     description.textContent = window.SolarSim.format.scenarioDescription(scenario);
     startButton.type = "button";
     startButton.className = "scenario-start-button";
     startButton.textContent = window.SolarSim.format.text("scenarios.start", {}, "Start");
     startButton.addEventListener("click", () => {
-        launchScenario(scenario.id, router);
+        launchScenario(scenario.id, state.router);
     });
 
-    item.append(title, description, startButton);
+    actions.append(startButton);
+
+    if (scenario.custom) {
+        const deleteButton = document.createElement("button");
+
+        deleteButton.type = "button";
+        deleteButton.className = "scenario-delete-button";
+        deleteButton.textContent = window.SolarSim.format.text("scenarios.delete", {}, "Delete");
+        deleteButton.addEventListener("click", () => {
+            deleteCustomScenario(scenario, state, controls);
+        });
+        actions.append(deleteButton);
+    }
+
+    item.append(title, description, actions);
     return item;
 }
 
@@ -346,6 +362,147 @@ async function createAndLaunchCustomScenario(state, controls, router) {
     }
 }
 
+async function deleteCustomScenario(scenario, state, controls) {
+    const scenarioName = window.SolarSim.format.scenarioName(scenario);
+    const confirmed = await requestScenarioConfirmation({
+        confirmLabel: window.SolarSim.format.text("scenarios.confirmDeleteAction", {}, "Delete scenario"),
+        message: window.SolarSim.format.text(
+            "scenarios.confirmDeleteBody",
+            { name: scenarioName },
+            `This removes "${scenarioName}" from your saved custom scenarios. The built-in scenarios and current physics settings are not affected.`,
+        ),
+        title: window.SolarSim.format.text("scenarios.confirmDeleteTitle", {}, "Delete custom scenario?"),
+        tone: "danger",
+    });
+
+    if (!confirmed) {
+        return;
+    }
+
+    state.loading = true;
+    setScenarioStatus(controls, window.SolarSim.format.text("scenarios.status.deleting", {}, "Deleting..."));
+    setScenarioControlsDisabled(controls, true);
+
+    try {
+        const response = await window.SolarSim.backend.simulation.deleteCustomScenario(scenario.id);
+
+        if (!response?.ok) {
+            setScenarioStatus(
+                controls,
+                response?.reason || window.SolarSim.format.text("scenarios.status.deleteFailed", {}, "Could not delete scenario."),
+                "error",
+            );
+            return;
+        }
+
+        state.scenarios = Array.isArray(response.scenarios)
+            ? response.scenarios
+            : state.scenarios.filter((item) => item.id !== scenario.id);
+        setScenarioStatus(controls, window.SolarSim.format.text("scenarios.status.deleted", {}, "Scenario deleted."), "ok");
+        renderScenarioWorkspace(state, controls);
+    } catch (error) {
+        console.info("Custom scenario deletion failed.", error);
+        setScenarioStatus(
+            controls,
+            window.SolarSim.format.text("scenarios.status.deleteFailed", {}, "Could not delete scenario."),
+            "error",
+        );
+    } finally {
+        state.loading = false;
+        setScenarioControlsDisabled(controls, false);
+        updateScenarioSummary(state, controls);
+    }
+}
+
+function requestScenarioConfirmation({ title, message, confirmLabel, tone = "" }) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        const dialog = document.createElement("section");
+        const header = document.createElement("header");
+        const heading = document.createElement("h2");
+        const copy = document.createElement("p");
+        const actions = document.createElement("div");
+        const cancelButton = document.createElement("button");
+        const confirmButton = document.createElement("button");
+
+        overlay.className = "scenario-confirm-overlay";
+        dialog.className = "scenario-confirm-dialog";
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.setAttribute("aria-labelledby", "scenario-confirm-title");
+        dialog.setAttribute("aria-describedby", "scenario-confirm-message");
+        dialog.dataset.tone = tone;
+        header.className = "scenario-confirm-header";
+        heading.id = "scenario-confirm-title";
+        heading.textContent = title;
+        copy.id = "scenario-confirm-message";
+        copy.textContent = message;
+        actions.className = "scenario-confirm-actions";
+        cancelButton.type = "button";
+        cancelButton.className = "scenario-confirm-button scenario-confirm-cancel";
+        cancelButton.textContent = window.SolarSim.format.text("common.cancel", {}, "Cancel");
+        confirmButton.type = "button";
+        confirmButton.className = "scenario-confirm-button scenario-confirm-primary";
+        confirmButton.textContent = confirmLabel;
+
+        header.append(heading);
+        actions.append(cancelButton, confirmButton);
+        dialog.append(header, copy, actions);
+        overlay.append(dialog);
+        document.body.append(overlay);
+
+        const previousActiveElement = document.activeElement;
+        let settled = false;
+
+        function settle(value) {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            document.removeEventListener("keydown", handleKeyDown, true);
+            overlay.remove();
+            previousActiveElement?.focus?.({ preventScroll: true });
+            resolve(value);
+        }
+
+        function handleKeyDown(event) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                settle(false);
+                return;
+            }
+
+            if (event.key !== "Tab") {
+                return;
+            }
+
+            const focusable = [cancelButton, confirmButton];
+            const currentIndex = focusable.indexOf(document.activeElement);
+            const nextIndex = event.shiftKey
+                ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+                : (currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+
+            event.preventDefault();
+            focusable[nextIndex].focus();
+        }
+
+        cancelButton.addEventListener("click", () => {
+            settle(false);
+        });
+        confirmButton.addEventListener("click", () => {
+            settle(true);
+        });
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) {
+                settle(false);
+            }
+        });
+        document.addEventListener("keydown", handleKeyDown, true);
+        cancelButton.focus({ preventScroll: true });
+    });
+}
+
 function launchScenario(scenarioId, router) {
     if (!scenarioId) {
         return;
@@ -379,6 +536,10 @@ function setScenarioStatus(controls, message, tone = "") {
 }
 
 function setScenarioControlsDisabled(controls, disabled) {
+    controls.scenarioList?.querySelectorAll("button").forEach((button) => {
+        button.disabled = disabled;
+    });
+
     controls.commandButtons.forEach((button) => {
         button.disabled = disabled;
     });

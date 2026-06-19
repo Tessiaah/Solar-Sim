@@ -697,10 +697,21 @@ selected_planet_names = tuple(
 )
 ```
 
-Then it registers a runtime scenario:
+Then it creates a runtime scenario entry:
 
 ```python
-self._custom_scenarios[scenario_id] = {
+scenario = create_custom_scenario_entry(
+    scenario_id,
+    scenario_name,
+    selected_body_ids,
+    include_sun,
+)
+```
+
+That entry still contains a factory:
+
+```python
+{
     "id": scenario_id,
     "name": scenario_name,
     "description": build_custom_scenario_description(selected_names, include_sun),
@@ -716,11 +727,40 @@ self._custom_scenarios[scenario_id] = {
 
 It stores a factory instead of live body objects, so every load/reset creates fresh `SimBody` instances.
 
+The app also persists the recipe for custom scenarios:
+
+```json
+{
+  "version": 1,
+  "lastCustomScenarioCounter": 1,
+  "scenarios": [
+    {
+      "id": "custom-1",
+      "name": "My Custom System",
+      "selectedBodyIds": ["venus", "earth", "mars"],
+      "includeSun": true
+    }
+  ]
+}
+```
+
+This file is stored under:
+
+```text
+%APPDATA%\Solar Sim\custom_scenarios.json
+```
+
+Only the scenario recipe is saved. Python does not save sandbox-edited masses, radii, positions, velocities, elapsed time, snapshots, or live `SimBody` objects.
+
+When the app starts, `SimulationRuntime` loads the saved recipes and calls the same scenario-entry builder to recreate the in-memory factory. That keeps scenario loading/reset behavior clean: a saved custom scenario always starts from its default generated state.
+
 Then it immediately loads the new scenario:
 
 ```python
 return self.load_scenario(scenario_id)
 ```
+
+Deleting a custom scenario removes the recipe from memory and rewrites the JSON file. Built-in scenarios are not deletable.
 
 ## 17. Physics Units vs Render Units
 
