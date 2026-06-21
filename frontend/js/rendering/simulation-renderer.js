@@ -87,10 +87,18 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     let readoutAnimationStartMs = performance.now();
     let orthographicViewSize = 320;
     let lastRenderedFrameMs = 0;
+    let nextRenderTargetMs = 0;
+    let renderMetricsFrameIndex = 0;
+    let renderMetricsLastFrameStartMs = 0;
+    let renderMetricsFrameTimeMs = 0;
+    let renderMetricsFrameCount = 0;
+    let renderMetricsAccumulatorMs = 0;
+    let renderMetricsFps = 0;
     let lastTrailElapsedS = null;
     let lastStepDurationMs = null;
     let lastStepCount = 0;
     let currentMaterialMode = getSphereQualityProfile(store)?.materialMode || "textured";
+    const frameLimitEarlyToleranceMs = 0.35;
     const readoutAnimationDurationMs = 160;
 
     scene.add(selectionMarker);
@@ -107,6 +115,7 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         const activeRunToken = runToken;
 
         lastRenderMs = performance.now();
+        resetRenderedFrameMetrics();
         cameraController.start();
         resize();
         loadCurrentSnapshot(activeRunToken).finally(() => {
@@ -278,7 +287,8 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
             return;
         }
 
-        lastRenderedFrameMs = frameStartMs;
+        markFrameLimiterRendered(frameStartMs);
+        recordRenderedFrameMetrics(frameStartMs);
         const deltaS = getRenderDeltaS();
 
         if (!paused && !stepRequestInFlight) {
@@ -953,6 +963,11 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
             applyLightingProfile(sceneObjects, lightingProfile);
         }
 
+        if (!changedSetting || changedSetting === "fpsLimit") {
+            resetFrameLimiter();
+            resetRenderedFrameMetrics();
+        }
+
         resize();
     }
 
@@ -1548,8 +1563,36 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         const frameIntervalMs = getFrameIntervalMs();
 
         return frameIntervalMs > 0
-            && lastRenderedFrameMs > 0
-            && frameStartMs - lastRenderedFrameMs < frameIntervalMs;
+            && nextRenderTargetMs > 0
+            && frameStartMs + frameLimitEarlyToleranceMs < nextRenderTargetMs;
+    }
+
+    function markFrameLimiterRendered(frameStartMs) {
+        const frameIntervalMs = getFrameIntervalMs();
+
+        lastRenderedFrameMs = frameStartMs;
+
+        if (frameIntervalMs <= 0) {
+            nextRenderTargetMs = 0;
+            return;
+        }
+
+        if (nextRenderTargetMs <= 0) {
+            nextRenderTargetMs = frameStartMs + frameIntervalMs;
+            return;
+        }
+
+        const elapsedPastTargetMs = frameStartMs - nextRenderTargetMs;
+        const intervalsToAdvance = elapsedPastTargetMs >= 0
+            ? Math.floor(elapsedPastTargetMs / frameIntervalMs) + 1
+            : 1;
+
+        nextRenderTargetMs += intervalsToAdvance * frameIntervalMs;
+    }
+
+    function resetFrameLimiter() {
+        lastRenderedFrameMs = 0;
+        nextRenderTargetMs = 0;
     }
 
     function getRenderDeltaS() {
@@ -1558,6 +1601,46 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
 
         lastRenderMs = now;
         return deltaS;
+    }
+
+    function resetRenderedFrameMetrics() {
+        resetFrameLimiter();
+        renderMetricsFrameIndex = 0;
+        renderMetricsLastFrameStartMs = 0;
+        renderMetricsFrameTimeMs = 0;
+        renderMetricsFrameCount = 0;
+        renderMetricsAccumulatorMs = 0;
+        renderMetricsFps = 0;
+    }
+
+    function recordRenderedFrameMetrics(frameStartMs) {
+        renderMetricsFrameIndex += 1;
+
+        if (renderMetricsLastFrameStartMs > 0) {
+            renderMetricsFrameTimeMs = frameStartMs - renderMetricsLastFrameStartMs;
+            renderMetricsFrameCount += 1;
+            renderMetricsAccumulatorMs += renderMetricsFrameTimeMs;
+
+            if (renderMetricsAccumulatorMs >= 500) {
+                renderMetricsFps = Math.round(
+                    (renderMetricsFrameCount * 1000) / renderMetricsAccumulatorMs,
+                );
+                renderMetricsFrameCount = 0;
+                renderMetricsAccumulatorMs = 0;
+            }
+        }
+
+        renderMetricsLastFrameStartMs = frameStartMs;
+    }
+
+    function getRenderedFps() {
+        if (renderMetricsFps > 0) {
+            return renderMetricsFps;
+        }
+
+        return renderMetricsFrameTimeMs > 0
+            ? Math.round(1000 / renderMetricsFrameTimeMs)
+            : null;
     }
 
     function getFrameIntervalMs() {
@@ -1579,6 +1662,9 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
             new CustomEvent("solar-sim:renderer-metrics", {
                 detail: {
                     fpsLimit: state?.graphics?.fpsLimit || "60",
+                    renderFps: getRenderedFps(),
+                    renderFrameIndex: renderMetricsFrameIndex,
+                    renderFrameTimeMs: renderMetricsFrameTimeMs || null,
                     pixelRatio: renderer.getPixelRatio(),
                     sphereGeometryDetail: currentGeometryDetail,
                     skyboxQuality: state?.graphics?.skyboxQuality || "full",

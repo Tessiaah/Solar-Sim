@@ -195,7 +195,7 @@ function createDebugAdapter() {
 }
 
 function applyResolution(resolution, displayMode) {
-    const [width, height] = resolution.split("x").map(Number);
+    const { width, height } = parseResolution(resolution);
 
     document.documentElement.style.setProperty("--app-resolution-width", `${width}px`);
     document.documentElement.style.setProperty("--app-resolution-height", `${height}px`);
@@ -234,7 +234,7 @@ function createHostWindowAdapter() {
     });
 
     function apply(graphics) {
-        const [width, height] = graphics.resolution.split("x").map(Number);
+        const { width, height } = parseResolution(graphics.resolution);
 
         if (!isPyWebViewReady || !window.SolarSim?.backend?.isAvailable()) {
             if (window.pywebview) {
@@ -261,6 +261,15 @@ function createHostWindowAdapter() {
     }
 
     return { apply };
+}
+
+function parseResolution(resolution) {
+    const [width, height] = String(resolution || "1920x1080").split("x").map(Number);
+
+    return {
+        width: Number.isFinite(width) && width > 0 ? width : 1920,
+        height: Number.isFinite(height) && height > 0 ? height : 1080,
+    };
 }
 
 function enterFullscreen(displayMode) {
@@ -320,9 +329,7 @@ function createSettingsMetricsDrawerController({ schema, store }) {
     let debugOverlayDragging = false;
     let debugOverlayDragOffsetX = 0;
     let debugOverlayDragOffsetY = 0;
-    let lastTime = performance.now();
-    let frames = 0;
-    let accumulator = 0;
+    let lastRendererMetricFrameIndex = 0;
     let latestRendererMetrics = null;
     let latestSimulationMetrics = null;
     let energyBaselineJ = NaN;
@@ -370,40 +377,7 @@ function createSettingsMetricsDrawerController({ schema, store }) {
         updateSimulationMetrics();
     }
 
-    function tick(time) {
-        const frameTime = time - lastTime;
-        lastTime = time;
-
-        if (drawerEnabled || debugOverlayEnabled) {
-            frames += 1;
-            accumulator += frameTime;
-            metricsPushGraphValue(frameTimes, frameTime, 120);
-            metricsDrawLineGraph(graphs.frameTime, frameTimes, {
-                color: "#6ee7d8",
-                maxHint: 42,
-            });
-            metricsDrawLineGraph(debugGraphs.frameTime, frameTimes, {
-                color: "#6ee7d8",
-                maxHint: 42,
-            });
-            metricsSetValue(values, "frameTime", `${frameTime.toFixed(1)} ms`);
-            metricsSetValue(debugValues, "frameTime", `${frameTime.toFixed(1)} ms`);
-
-            if (accumulator >= 500) {
-                const fps = Math.round((frames * 1000) / accumulator);
-
-                metricsSetValue(values, "fps", fps);
-                metricsSetValue(debugValues, "fps", fps);
-                frames = 0;
-                accumulator = 0;
-            }
-        }
-
-        requestAnimationFrame(tick);
-    }
-
     setDebugOverlayLocked(debugOverlayLocked);
-    requestAnimationFrame(tick);
 
     return { apply };
 
@@ -460,6 +434,7 @@ function createSettingsMetricsDrawerController({ schema, store }) {
             return;
         }
 
+        updateRenderedFrameMetrics(latestRendererMetrics);
         metricsSetValue(values, "pixelRatio", Number(latestRendererMetrics.pixelRatio || 0).toFixed(2));
         metricsSetValue(values, "sphereGeometryDetail", latestRendererMetrics.sphereGeometryDetail ?? "--");
         metricsSetValue(values, "trailPointCount", latestRendererMetrics.trailPointCount ?? "--");
@@ -473,6 +448,38 @@ function createSettingsMetricsDrawerController({ schema, store }) {
 
             metricsSetValue(values, "simulationStep", stepLabel);
             metricsSetValue(debugValues, "simulationStep", stepLabel);
+        }
+    }
+
+    function updateRenderedFrameMetrics(metrics) {
+        const frameIndex = Number(metrics.renderFrameIndex || 0);
+        const frameTime = Number(metrics.renderFrameTimeMs);
+
+        if (
+            frameIndex <= 0
+            || frameIndex === lastRendererMetricFrameIndex
+            || !Number.isFinite(frameTime)
+            || frameTime <= 0
+        ) {
+            return;
+        }
+
+        lastRendererMetricFrameIndex = frameIndex;
+        metricsPushGraphValue(frameTimes, frameTime, 120);
+        metricsDrawLineGraph(graphs.frameTime, frameTimes, {
+            color: "#6ee7d8",
+            maxHint: 42,
+        });
+        metricsDrawLineGraph(debugGraphs.frameTime, frameTimes, {
+            color: "#6ee7d8",
+            maxHint: 42,
+        });
+        metricsSetValue(values, "frameTime", `${frameTime.toFixed(1)} ms`);
+        metricsSetValue(debugValues, "frameTime", `${frameTime.toFixed(1)} ms`);
+
+        if (Number.isFinite(metrics.renderFps) && metrics.renderFps > 0) {
+            metricsSetValue(values, "fps", Math.round(metrics.renderFps));
+            metricsSetValue(debugValues, "fps", Math.round(metrics.renderFps));
         }
     }
 
@@ -852,6 +859,7 @@ function translateSettingOption(categoryKey, control, option) {
         option.labelKey,
         `settings.${categoryKey}.${control.key}.${option.value}`,
         `settings.${control.key}.${option.value}`,
+        getSharedSettingOptionKey(control.key, option.value),
         `settings.${option.value}`,
     ].filter(Boolean);
 
@@ -864,4 +872,28 @@ function translateSettingOption(categoryKey, control, option) {
     }
 
     return option.label;
+}
+
+function getSharedSettingOptionKey(controlKey, optionValue) {
+    if (controlKey === "skyboxQuality" || controlKey === "lightingQuality") {
+        return `settings.quality.${optionValue}`;
+    }
+
+    if (controlKey === "sphereQuality") {
+        return `settings.sphereQuality.${optionValue}`;
+    }
+
+    if (controlKey === "trailSystem") {
+        return `settings.trail.${optionValue}`;
+    }
+
+    if (controlKey === "language") {
+        return `settings.language.${optionValue}`;
+    }
+
+    if (controlKey === "uiToggles" || controlKey === "performanceOverlay") {
+        return `settings.debug.${optionValue}`;
+    }
+
+    return null;
 }

@@ -34,6 +34,12 @@ SCENARIOS = {
     },
 }
 
+MAX_INTEGRATION_STEPS = 240
+MAX_BODY_MASS_KG = 1.0e45
+MAX_BODY_RADIUS_M = 1.0e11
+MAX_BODY_DISTANCE_M = 1.0e14
+MAX_BODY_SPEED_MS = 3.0e6
+
 
 class SimulationRuntime:
     def __init__(self, scenario_storage: CustomScenarioStorage | None = None) -> None:
@@ -149,13 +155,21 @@ class SimulationRuntime:
         if "massKg" in safe_updates:
             next_definition = replace(
                 next_definition,
-                mass_kg=normalize_positive_float(safe_updates["massKg"], next_definition.mass_kg),
+                mass_kg=normalize_positive_float(
+                    safe_updates["massKg"],
+                    next_definition.mass_kg,
+                    MAX_BODY_MASS_KG,
+                ),
             )
 
         if "radiusM" in safe_updates:
             next_definition = replace(
                 next_definition,
-                radius_m=normalize_positive_float(safe_updates["radiusM"], next_definition.radius_m),
+                radius_m=normalize_positive_float(
+                    safe_updates["radiusM"],
+                    next_definition.radius_m,
+                    MAX_BODY_RADIUS_M,
+                ),
             )
 
         body.definition = next_definition
@@ -166,6 +180,7 @@ class SimulationRuntime:
                 normalize_non_negative_float(
                     safe_updates["distanceM"],
                     float(np.linalg.norm(body.state.position_m)),
+                    MAX_BODY_DISTANCE_M,
                 ),
                 fallback_direction=np.array([1.0, 0.0, 0.0], dtype=np.float64),
             )
@@ -174,6 +189,7 @@ class SimulationRuntime:
             body.state.position_m = normalize_vector3_float(
                 safe_updates["positionM"],
                 body.state.position_m,
+                MAX_BODY_DISTANCE_M,
             )
 
         if "speedMS" in safe_updates:
@@ -182,6 +198,7 @@ class SimulationRuntime:
                 normalize_non_negative_float(
                     safe_updates["speedMS"],
                     float(np.linalg.norm(body.state.velocity_ms)),
+                    MAX_BODY_SPEED_MS,
                 ),
                 fallback_direction=get_tangent_direction(body.state.position_m),
             )
@@ -225,7 +242,7 @@ class SimulationRuntime:
         }
 
     def step(self, steps: int = 1) -> dict:
-        safe_steps = max(1, min(int(steps), 240))
+        safe_steps = normalize_step_count(steps)
 
         for _ in range(safe_steps):
             velocity_verlet(self._bodies, self._dt_s)
@@ -474,31 +491,59 @@ def normalize_include_sun(value) -> bool:
     return value is not False
 
 
-def normalize_positive_float(value, fallback: float) -> float:
+def normalize_step_count(value) -> int:
     try:
         number_value = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        return 1
+
+    if not np.isfinite(number_value):
+        return 1
+
+    return max(1, min(int(number_value), MAX_INTEGRATION_STEPS))
+
+
+def normalize_positive_float(value, fallback: float, maximum: float | None = None) -> float:
+    try:
+        number_value = float(value)
+    except (TypeError, ValueError, OverflowError):
         return fallback
+
+    if np.isposinf(number_value) and maximum is not None:
+        return maximum
 
     if not np.isfinite(number_value) or number_value <= 0.0:
         return fallback
 
+    if maximum is not None:
+        return min(number_value, maximum)
+
     return number_value
 
 
-def normalize_non_negative_float(value, fallback: float) -> float:
+def normalize_non_negative_float(value, fallback: float, maximum: float | None = None) -> float:
     try:
         number_value = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return fallback
+
+    if np.isposinf(number_value) and maximum is not None:
+        return maximum
 
     if not np.isfinite(number_value) or number_value < 0.0:
         return fallback
 
+    if maximum is not None:
+        return min(number_value, maximum)
+
     return number_value
 
 
-def normalize_vector3_float(value, fallback: np.ndarray) -> np.ndarray:
+def normalize_vector3_float(
+    value,
+    fallback: np.ndarray,
+    max_magnitude: float | None = None,
+) -> np.ndarray:
     if not isinstance(value, (list, tuple)) or len(value) < 3:
         return np.array(fallback, dtype=np.float64, copy=True)
 
@@ -509,6 +554,12 @@ def normalize_vector3_float(value, fallback: np.ndarray) -> np.ndarray:
 
     if not np.all(np.isfinite(vector)):
         return np.array(fallback, dtype=np.float64, copy=True)
+
+    if max_magnitude is not None:
+        magnitude = float(np.linalg.norm(vector))
+
+        if magnitude > max_magnitude and magnitude > 0.0:
+            return vector / magnitude * max_magnitude
 
     return vector
 

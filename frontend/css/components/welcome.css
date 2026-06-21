@@ -13,9 +13,9 @@
     z-index: -1;
     content: "";
     background:
-        linear-gradient(90deg, rgb(7 9 13 / 94%) 0%, rgb(7 9 13 / 76%) 42%, rgb(7 9 13 / 24%) 100%),
-        radial-gradient(circle at 72% 44%, rgb(244 201 93 / 12%), transparent 26%),
-        radial-gradient(circle at 48% 64%, rgb(110 231 216 / 8%), transparent 22%);
+        linear-gradient(90deg, rgb(2 3 6 / 96%) 0%, rgb(2 3 6 / 78%) 39%, rgb(2 3 6 / 18%) 100%),
+        radial-gradient(ellipse at 72% 48%, rgb(255 255 255 / 7%), transparent 25%),
+        radial-gradient(circle at 52% 68%, rgb(110 231 216 / 4%), transparent 24%);
     pointer-events: none;
 }
 

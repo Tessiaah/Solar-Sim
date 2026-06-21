@@ -540,6 +540,159 @@ body.is-simulation-camera-looking * {
     white-space: nowrap;
 }
 
+.simulation-toast {
+    position: fixed;
+    top: 88px;
+    right: 28px;
+    z-index: 80;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 30px;
+    gap: 14px;
+    align-items: center;
+    width: min(430px, calc(100vw - 56px));
+    margin: 0;
+    padding: 15px 14px 15px 16px;
+    border: 2px solid #f49b2f;
+    border-radius: 16px;
+    background:
+        linear-gradient(135deg, rgb(18 20 29 / 96%), rgb(7 9 14 / 94%)),
+        rgb(9 11 17 / 96%);
+    box-shadow:
+        0 26px 70px rgb(0 0 0 / 52%),
+        inset 0 1px 0 rgb(255 255 255 / 8%);
+    color: var(--color-text);
+    line-height: 1.2;
+    opacity: 0;
+    pointer-events: auto;
+    transform: translateY(-12px) scale(0.985);
+    transition:
+        opacity 180ms ease,
+        transform 180ms ease,
+        border-color 180ms ease;
+    backdrop-filter: blur(18px);
+}
+
+.simulation-toast-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgb(244 155 47 / 24%);
+    border-radius: 12px;
+    background:
+        radial-gradient(circle at 38% 25%, rgb(255 185 83 / 34%), transparent 58%),
+        rgb(100 58 15 / 54%);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 8%),
+        0 12px 28px rgb(244 155 47 / 14%);
+    color: #ffb24d;
+}
+
+.simulation-toast-icon svg {
+    width: 31px;
+    height: 31px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.9;
+}
+
+.simulation-toast-copy {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.simulation-toast-copy strong {
+    overflow: hidden;
+    color: #f8fafc;
+    font-size: 1.16rem;
+    font-weight: 900;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.simulation-toast-copy span {
+    overflow: hidden;
+    color: #aeb7c7;
+    font-size: 0.88rem;
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.simulation-toast-close {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #aeb7c7;
+    cursor: pointer;
+}
+
+.simulation-toast-close:hover {
+    color: #f8fafc;
+}
+
+.simulation-toast-close svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 2.2;
+}
+
+.simulation-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.simulation-toast[hidden] {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .simulation-toast {
+        top: 78px;
+        right: 16px;
+        grid-template-columns: 48px minmax(0, 1fr) 32px;
+        gap: 12px;
+        width: min(420px, calc(100vw - 32px));
+        padding: 15px;
+        border-radius: 12px;
+    }
+
+    .simulation-toast-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 11px;
+    }
+
+    .simulation-toast-icon svg {
+        width: 32px;
+        height: 32px;
+    }
+
+    .simulation-toast-copy strong {
+        font-size: 1.12rem;
+    }
+
+    .simulation-toast-copy span {
+        font-size: 0.88rem;
+    }
+
+    .simulation-toast-close {
+        width: 32px;
+        height: 32px;
+    }
+}
+
 .body-facts ul {
     display: grid;
     gap: 7px;

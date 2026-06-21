@@ -323,6 +323,25 @@
 
             <main id="simulation-screen" class="screen simulation-screen" data-screen="simulation">
                 <div id="simulation-viewport" class="simulation-viewport" aria-label="Simulation viewport" data-i18n-aria-label="simulation.viewport"></div>
+                <div class="simulation-toast" data-body-tune-notice role="status" aria-live="polite" hidden>
+                    <span class="simulation-toast-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M12 3.4 21 19H3L12 3.4Z"></path>
+                            <path d="M12 8.4v5.2"></path>
+                            <path d="M12 17.2h.01"></path>
+                        </svg>
+                    </span>
+                    <span class="simulation-toast-copy">
+                        <strong data-body-tune-notice-title></strong>
+                        <span data-body-tune-notice-message></span>
+                    </span>
+                    <button type="button" class="simulation-toast-close" data-body-tune-notice-close aria-label="Dismiss notification" data-i18n-aria-label="common.dismiss" title="Dismiss notification" data-i18n-title="common.dismiss">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M6 6 18 18"></path>
+                            <path d="M18 6 6 18"></path>
+                        </svg>
+                    </button>
+                </div>
 
                 <header class="simulation-toolbar">
                     <button type="button" data-route="welcome">

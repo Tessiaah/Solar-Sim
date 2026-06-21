@@ -96,6 +96,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
         uiState.scenarioEpoch = payload.scenarioEpoch ?? uiState.scenarioEpoch;
         uiState.scenarioId = payload.scenarioId ?? uiState.scenarioId;
         uiState.selectedBodyId = payload.selectedBodyId;
+        clearBodyTuningNotice(controls.tuning);
         updateBodySelector(controls.bodySelect, payload.bodies, payload.selectedBodyId);
         updateSelectedBodyStats(controls.stats, uiState, controls.tuning);
         syncBodyTuningControls(controls.tuning, uiState);
@@ -103,6 +104,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
 
     renderer.onSelectionChanged((payload) => {
         uiState.selectedBodyId = payload.selectedBodyId;
+        clearBodyTuningNotice(controls.tuning);
 
         if (controls.bodySelect && controls.bodySelect.value !== payload.selectedBodyId) {
             controls.bodySelect.value = payload.selectedBodyId || "";
@@ -288,6 +290,11 @@ function collectSimulationControls(root) {
             ),
             resetButton: root.querySelector("[data-body-tune-reset]"),
             scenarioEpoch: null,
+            notice: root.querySelector("[data-body-tune-notice]"),
+            noticeCloseButton: root.querySelector("[data-body-tune-notice-close]"),
+            noticeMessage: root.querySelector("[data-body-tune-notice-message]"),
+            noticeTimer: null,
+            noticeTitle: root.querySelector("[data-body-tune-notice-title]"),
             previewBodyId: null,
             previewKeys: new Set(),
             status: root.querySelector("[data-body-tune-status]"),
@@ -334,6 +341,10 @@ function bindSimulationControls({ controls, renderer, store }) {
 
     controls.trackToggle?.addEventListener("change", () => {
         setTrackSelected(controls, renderer, controls.trackToggle.checked);
+    });
+
+    controls.tuning.noticeCloseButton?.addEventListener("click", () => {
+        clearBodyTuningNotice(controls.tuning);
     });
 }
 
@@ -964,31 +975,42 @@ function updateBodyTuningFromSlider({ input, renderer, stats, tuning, uiState })
     syncBodyTuningFieldDisplay(tuning, bodyId, key);
     previewSelectedBodyTuning(renderer, tuning, bodyId);
     updateSelectedBodyStats(stats, uiState, tuning);
+    clearBodyTuningNotice(tuning);
     setBodyTuningStatus(tuning, "simulation.sandboxEdited", "Edited");
 }
 
 function updateBodyTuningFromValueInput({ input, key, renderer, stats, tuning, uiState }) {
     const field = BODY_TUNING_FIELDS[key];
     const bodyId = uiState.selectedBodyId;
-    const value = parseBodyTuningValue(input.value, field);
+    const parsedValue = parseBodyTuningValue(input.value, field);
 
-    if (!field || !bodyId || !Number.isFinite(value)) {
+    if (!field || !bodyId || !parsedValue.ok) {
         setBodyTuningStatus(tuning, "simulation.sandboxFailed", "Failed");
         syncBodyTuningFieldDisplay(tuning, bodyId, key);
         return;
     }
 
-    setBodyTuningValue(tuning, bodyId, key, value);
-    markBodyTuningPreview(tuning, bodyId, key);
-    syncBodyTuningFieldDisplay(tuning, bodyId, key);
-    previewSelectedBodyTuning(renderer, tuning, bodyId);
-    updateSelectedBodyStats(stats, uiState, tuning);
-    commitBodyTuningField({
-        key,
+    if (Number.isFinite(parsedValue.previewValue)) {
+        setBodyTuningValue(tuning, bodyId, key, parsedValue.previewValue);
+        markBodyTuningPreview(tuning, bodyId, key);
+        syncBodyTuningFieldDisplay(tuning, bodyId, key);
+        previewSelectedBodyTuning(renderer, tuning, bodyId);
+        updateSelectedBodyStats(stats, uiState, tuning);
+    } else {
+        renderer.previewBodyParameters?.(bodyId, null);
+        clearBodyTuningPreview(tuning, bodyId);
+    }
+
+    clearBodyTuningNotice(tuning);
+
+    commitBodyTuningValues({
         renderer,
         stats,
         tuning,
         uiState,
+        updates: {
+            [key]: parsedValue.requestValue,
+        },
     });
 }
 
@@ -1019,6 +1041,7 @@ async function resetSelectedBodyTuning({ renderer, stats, tuning, uiState }) {
     }
 
     setBodyTuningBusy(tuning, true);
+    clearBodyTuningNotice(tuning);
     setBodyTuningStatus(tuning, "simulation.sandboxApplying", "Applying");
 
     const response = await renderer.resetBody(bodyId);
@@ -1036,6 +1059,7 @@ async function resetSelectedBodyTuning({ renderer, stats, tuning, uiState }) {
 
 async function resetSystemTuning({ renderer, stats, tuning, uiState }) {
     setBodyTuningBusy(tuning, true);
+    clearBodyTuningNotice(tuning);
     setBodyTuningStatus(tuning, "simulation.sandboxApplying", "Applying");
 
     const response = await renderer.resetScenario();
@@ -1061,25 +1085,46 @@ async function commitBodyTuningValues({ renderer, stats, tuning, uiState, update
     }
 
     setBodyTuningBusy(tuning, true);
+    clearBodyTuningNotice(tuning);
     setBodyTuningStatus(tuning, "simulation.sandboxApplying", "Applying");
 
     const response = await renderer.updateBodyParameters(bodyId, updates);
 
     setBodyTuningBusy(tuning, false);
     if (response?.ok) {
+        const clamped = applyAcceptedBodyTuningValues({
+            bodyId,
+            response,
+            tuning,
+            updates,
+        });
+
         clearBodyTuningPreview(tuning, bodyId, Object.keys(updates));
+        if (clamped) {
+            showBodyTuningNotice(
+                tuning,
+                "simulation.sandboxValueTooHigh",
+                "Value too high. Maximum applied.",
+            );
+        }
     } else {
         renderer.previewBodyParameters?.(bodyId, null);
         clearBodyTuningEdits(tuning, bodyId);
         clearBodyTuningPreview(tuning, bodyId);
     }
     syncBodyTuningControls(tuning, uiState);
+    forceSyncBodyTuningFields(tuning, bodyId, Object.keys(updates));
     updateSelectedBodyStats(stats, uiState, tuning);
-    setBodyTuningStatus(
-        tuning,
-        response?.ok ? "simulation.sandboxApplied" : "simulation.sandboxFailed",
-        response?.ok ? "Applied" : "Failed",
-    );
+
+    const wasAdjusted = response?.ok && tuning.notice && !tuning.notice.hidden;
+    const statusKey = response?.ok
+        ? (wasAdjusted ? "simulation.sandboxAdjusted" : "simulation.sandboxApplied")
+        : "simulation.sandboxFailed";
+    const statusFallback = response?.ok
+        ? (wasAdjusted ? "Adjusted" : "Applied")
+        : "Failed";
+
+    setBodyTuningStatus(tuning, statusKey, statusFallback);
 }
 
 function previewSelectedBodyTuning(renderer, tuning, bodyId) {
@@ -1112,6 +1157,110 @@ function setBodyTuningStatus(tuning, key, fallback) {
     tuning.status.textContent = window.SolarSim.format.text(key, {}, fallback);
 }
 
+function showBodyTuningNotice(tuning, key, fallback) {
+    if (!tuning.notice) {
+        return;
+    }
+
+    if (tuning.noticeTimer) {
+        clearTimeout(tuning.noticeTimer);
+        tuning.noticeTimer = null;
+    }
+
+    const copy = getBodyTuningNoticeCopy(key, fallback);
+
+    tuning.notice.hidden = false;
+    tuning.notice.setAttribute("aria-label", `${copy.title}. ${copy.message}`.trim());
+
+    if (tuning.noticeTitle && tuning.noticeMessage) {
+        tuning.noticeTitle.dataset.i18n = copy.titleKey;
+        tuning.noticeTitle.textContent = copy.title;
+        tuning.noticeMessage.dataset.i18n = copy.messageKey;
+        tuning.noticeMessage.textContent = copy.message;
+    }
+
+    requestAnimationFrame(() => {
+        tuning.notice?.classList.add("is-visible");
+    });
+
+    tuning.noticeTimer = window.setTimeout(() => {
+        tuning.noticeTimer = null;
+        hideBodyTuningNotice(tuning);
+    }, 3200);
+}
+
+function clearBodyTuningNotice(tuning) {
+    if (!tuning.notice) {
+        return;
+    }
+
+    if (tuning.noticeTimer) {
+        clearTimeout(tuning.noticeTimer);
+        tuning.noticeTimer = null;
+    }
+
+    hideBodyTuningNotice(tuning, true);
+}
+
+function hideBodyTuningNotice(tuning, immediate = false) {
+    if (!tuning.notice) {
+        return;
+    }
+
+    tuning.notice.classList.remove("is-visible");
+
+    if (!immediate) {
+        window.setTimeout(() => {
+            if (!tuning.notice?.classList.contains("is-visible")) {
+                tuning.notice.hidden = true;
+                tuning.notice.removeAttribute("aria-label");
+                clearBodyTuningNoticeText(tuning);
+            }
+        }, 180);
+        return;
+    }
+
+    tuning.notice.hidden = true;
+    tuning.notice.removeAttribute("aria-label");
+    clearBodyTuningNoticeText(tuning);
+}
+
+function clearBodyTuningNoticeText(tuning) {
+    if (tuning.noticeTitle) {
+        delete tuning.noticeTitle.dataset.i18n;
+        tuning.noticeTitle.textContent = "";
+    }
+
+    if (tuning.noticeMessage) {
+        delete tuning.noticeMessage.dataset.i18n;
+        tuning.noticeMessage.textContent = "";
+    }
+}
+
+function getBodyTuningNoticeCopy(key, fallback) {
+    if (key === "simulation.sandboxValueTooHigh") {
+        const titleKey = "simulation.sandboxValueTooHighTitle";
+        const messageKey = "simulation.sandboxValueTooHighMessage";
+
+        return {
+            titleKey,
+            messageKey,
+            title: window.SolarSim.format.text(titleKey, {}, "Value too high"),
+            message: window.SolarSim.format.text(messageKey, {}, "Maximum applied."),
+        };
+    }
+
+    const text = window.SolarSim.format.text(key, {}, fallback);
+    const [title, ...messageParts] = String(text).split(". ");
+
+    return {
+        titleKey: key,
+        messageKey: key,
+        title: title || String(fallback || key),
+        message: messageParts.join(". ") || "",
+    };
+}
+
 function parseBodyTuningMultiplier(value, field) {
     const numberValue = Number(value);
 
@@ -1124,17 +1273,34 @@ function parseBodyTuningMultiplier(value, field) {
 
 function parseBodyTuningValue(value, field) {
     if (!field) {
-        return NaN;
+        return { ok: false };
     }
 
-    const normalized = String(value || "").trim().replace(",", ".");
+    const normalized = String(value ?? "").trim().replace(",", ".");
+
+    if (!normalized) {
+        return { ok: false };
+    }
+
     const numberValue = Number(normalized);
 
-    if (!Number.isFinite(numberValue) || numberValue < field.valueMin) {
-        return NaN;
+    if (numberValue === Infinity) {
+        return {
+            ok: true,
+            previewValue: NaN,
+            requestValue: normalized,
+        };
     }
 
-    return numberValue;
+    if (!Number.isFinite(numberValue) || numberValue < field.valueMin) {
+        return { ok: false };
+    }
+
+    return {
+        ok: true,
+        previewValue: numberValue,
+        requestValue: numberValue,
+    };
 }
 
 function getBodyTuningBaseline(tuning, bodyId) {
@@ -1164,6 +1330,72 @@ function getBodyTuningValue(tuning, bodyId, key) {
     }
 
     return baseline[key] * getBodyTuningMultiplier(tuning, bodyId, key);
+}
+
+function applyAcceptedBodyTuningValues({ bodyId, response, tuning, updates }) {
+    const acceptedValues = getAcceptedBodyTuningValues(response, bodyId, Object.keys(updates));
+    let clamped = false;
+
+    Object.entries(updates).forEach(([key, requestedValue]) => {
+        const acceptedValue = acceptedValues[key];
+
+        if (!Number.isFinite(acceptedValue)) {
+            return;
+        }
+
+        if (isAcceptedValueLowerThanRequested(requestedValue, acceptedValue)) {
+            clamped = true;
+        }
+
+        setBodyTuningValue(tuning, bodyId, key, acceptedValue);
+    });
+
+    return clamped;
+}
+
+function getAcceptedBodyTuningValues(response, bodyId, keys) {
+    const metadataBody = response?.scenario?.bodies?.find((body) => body.id === bodyId);
+    const snapshotBody = response?.snapshot?.bodies?.find((body) => body.id === bodyId);
+    const acceptedValues = {};
+
+    keys.forEach((key) => {
+        if (key === "massKg") {
+            acceptedValues[key] = Number(metadataBody?.massKg);
+            return;
+        }
+
+        if (key === "radiusM") {
+            acceptedValues[key] = Number(metadataBody?.radiusM);
+            return;
+        }
+
+        if (key === "distanceM") {
+            acceptedValues[key] = window.SolarSim.format.vectorMagnitude(snapshotBody?.positionM);
+            return;
+        }
+
+        if (key === "speedMS") {
+            acceptedValues[key] = window.SolarSim.format.vectorMagnitude(snapshotBody?.velocityMS);
+        }
+    });
+
+    return acceptedValues;
+}
+
+function isAcceptedValueLowerThanRequested(requestedValue, acceptedValue) {
+    const requestedNumber = Number(requestedValue);
+
+    if (requestedNumber === Infinity && Number.isFinite(acceptedValue)) {
+        return true;
+    }
+
+    if (!Number.isFinite(requestedNumber) || !Number.isFinite(acceptedValue)) {
+        return false;
+    }
+
+    const tolerance = Math.max(Math.abs(requestedNumber), Math.abs(acceptedValue), 1) * 1e-10;
+
+    return requestedNumber - acceptedValue > tolerance;
 }
 
 function setBodyTuningValue(tuning, bodyId, key, value) {
@@ -1229,13 +1461,20 @@ function clearBodyTuningPreview(tuning, bodyId, keys = null) {
     }
 }
 
-function syncBodyTuningFieldDisplay(tuning, bodyId, key) {
+function forceSyncBodyTuningFields(tuning, bodyId, keys) {
+    keys.forEach((key) => {
+        syncBodyTuningFieldDisplay(tuning, bodyId, key, { forceValueInput: true });
+    });
+}
+
+function syncBodyTuningFieldDisplay(tuning, bodyId, key, options = {}) {
     const field = BODY_TUNING_FIELDS[key];
     const slider = Array.from(tuning.inputs).find((input) => input.dataset.bodyTune === key);
     const output = tuning.outputs.get(key);
     const valueInput = tuning.valueInputs.get(key);
     const value = getBodyTuningValue(tuning, bodyId, key);
     const multiplier = getBodyTuningMultiplier(tuning, bodyId, key);
+    const forceValueInput = Boolean(options.forceValueInput);
 
     if (slider && field) {
         slider.value = clampBodyTuningMultiplierForSlider(multiplier, field);
@@ -1250,7 +1489,7 @@ function syncBodyTuningFieldDisplay(tuning, bodyId, key) {
             : "";
     }
 
-    if (valueInput && valueInput !== document.activeElement) {
+    if (valueInput && (forceValueInput || valueInput !== document.activeElement)) {
         valueInput.value = Number.isFinite(value)
             ? formatBodyTuningRawValue(value)
             : "";
@@ -1266,7 +1505,17 @@ function clampBodyTuningMultiplierForSlider(multiplier, field) {
 }
 
 function formatBodyTuningMultiplier(value) {
-    return `${Number(value).toFixed(2)}x`;
+    const numberValue = Number(value);
+
+    if (!Number.isFinite(numberValue)) {
+        return "--";
+    }
+
+    if (Math.abs(numberValue) >= 100_000) {
+        return `${numberValue.toExponential(2)}x`;
+    }
+
+    return `${numberValue.toFixed(2)}x`;
 }
 
 function formatBodyTuningRawValue(value) {
