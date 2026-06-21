@@ -1437,11 +1437,17 @@ function createBodyFacts(metadata, snapshotBody, snapshot) {
         return [];
     }
 
-    const facts = Array.isArray(metadata.facts)
+    const metadataFacts = Array.isArray(metadata.facts)
         ? metadata.facts
             .filter((fact) => typeof fact === "string" && fact.trim().length > 0)
             .map(window.SolarSim.format.metadataFact)
         : [];
+
+    if (metadataFacts.length > 0) {
+        return metadataFacts.slice(0, 6);
+    }
+
+    const facts = [];
     const textureCount = Object.values(metadata.visual?.textures || {}).filter(Boolean).length;
 
     if (metadata.parent) {
