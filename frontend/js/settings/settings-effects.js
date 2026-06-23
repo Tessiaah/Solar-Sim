@@ -654,7 +654,11 @@ function metricsCollectElements(root, selector, datasetKey) {
 
 function metricsSetValue(values, key, value) {
     if (values[key]) {
-        values[key].textContent = value;
+        const nextValue = String(value);
+
+        if (values[key].textContent !== nextValue) {
+            values[key].textContent = nextValue;
+        }
     }
 }
 
@@ -714,7 +718,7 @@ function metricsPushGraphValue(values, value, limit) {
 }
 
 function metricsDrawLineGraph(canvas, values, { color, maxHint, centerZero = false, minAbs = 0 } = {}) {
-    if (!canvas || canvas.classList.contains("is-hidden")) {
+    if (!canvas || canvas.classList.contains("is-hidden") || !metricsElementIsVisible(canvas)) {
         return;
     }
 
@@ -778,6 +782,10 @@ function metricsDrawLineGraph(canvas, values, { color, maxHint, centerZero = fal
     });
 
     context.stroke();
+}
+
+function metricsElementIsVisible(element) {
+    return element.getClientRects().length > 0;
 }
 
 function metricsFormatDuration(valueS) {

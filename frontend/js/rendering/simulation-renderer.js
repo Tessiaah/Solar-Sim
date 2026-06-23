@@ -97,8 +97,12 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     let lastTrailElapsedS = null;
     let lastStepDurationMs = null;
     let lastStepCount = 0;
+    let lastRendererMetricsEmitMs = Number.NEGATIVE_INFINITY;
+    let lastSimulationMetricsEmitMs = Number.NEGATIVE_INFINITY;
     let currentMaterialMode = getSphereQualityProfile(store)?.materialMode || "textured";
     const frameLimitEarlyToleranceMs = 0.35;
+    const rendererMetricsEmitIntervalMs = 125;
+    const simulationMetricsEmitIntervalMs = 200;
     const readoutAnimationDurationMs = 160;
 
     scene.add(selectionMarker);
@@ -1611,6 +1615,8 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
         renderMetricsFrameCount = 0;
         renderMetricsAccumulatorMs = 0;
         renderMetricsFps = 0;
+        lastRendererMetricsEmitMs = Number.NEGATIVE_INFINITY;
+        lastSimulationMetricsEmitMs = Number.NEGATIVE_INFINITY;
     }
 
     function recordRenderedFrameMetrics(frameStartMs) {
@@ -1656,6 +1662,13 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     }
 
     function emitRendererMetrics() {
+        const now = performance.now();
+
+        if (now - lastRendererMetricsEmitMs < rendererMetricsEmitIntervalMs) {
+            return;
+        }
+
+        lastRendererMetricsEmitMs = now;
         const state = store?.getState?.();
 
         window.dispatchEvent(
@@ -1682,6 +1695,13 @@ window.SolarSim.rendering.createSimulationRenderer = function createSimulationRe
     }
 
     function emitSimulationMetrics(snapshot) {
+        const now = performance.now();
+
+        if (now - lastSimulationMetricsEmitMs < simulationMetricsEmitIntervalMs) {
+            return;
+        }
+
+        lastSimulationMetricsEmitMs = now;
         window.dispatchEvent(
             new CustomEvent("solar-sim:simulation-metrics", {
                 detail: {

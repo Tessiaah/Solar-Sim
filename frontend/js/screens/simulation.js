@@ -88,7 +88,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
     bindSimulationControls({ controls, renderer, store });
     bindBodyInspectorControls({ controls, renderer, uiState });
     bindCameraSettingsControls(controls.cameraSettings, store);
-    bindOrientationGizmoControls(controls.orientationGizmo, renderer);
+    const orientationGizmoController = bindOrientationGizmoControls(controls.orientationGizmo, renderer);
 
     renderer.onBodiesChanged((payload) => {
         uiState.bodiesById = new Map(payload.bodies.map((body) => [body.id, body]));
@@ -156,6 +156,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
             simulationEntryToken = entryToken;
             requestedScenarioId = null;
             renderer.stop();
+            orientationGizmoController.start();
 
             if (shouldResumeExistingScenario) {
                 renderer.start();
@@ -178,6 +179,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
         }
 
         simulationEntryToken += 1;
+        orientationGizmoController.stop();
         renderer.stop();
     });
 
@@ -230,6 +232,7 @@ window.SolarSim.screens.initSimulationScreen = function initSimulationScreen({ r
     });
 
     window.addEventListener("beforeunload", () => {
+        orientationGizmoController.stop();
         renderer.destroy();
     });
 
@@ -532,7 +535,7 @@ function bindCameraSettingsControls(cameraSettings, store) {
 
 function bindOrientationGizmoControls(orientationGizmo, renderer) {
     if (!orientationGizmo?.root || !orientationGizmo.scene || !renderer?.setCameraView) {
-        return;
+        return createNoopLifecycleController();
     }
 
     const cameraQuaternion = new THREE.Quaternion();
@@ -554,6 +557,8 @@ function bindOrientationGizmoControls(orientationGizmo, renderer) {
     let dragging = false;
     let lastPointerX = 0;
     let lastPointerY = 0;
+    let animationFrame = null;
+    let running = false;
 
     orientationGizmo.viewButtons.forEach((button) => {
         button.addEventListener("click", () => {
@@ -563,6 +568,10 @@ function bindOrientationGizmoControls(orientationGizmo, renderer) {
     });
 
     orientationGizmo.scene.addEventListener("pointerdown", (event) => {
+        if (!running) {
+            return;
+        }
+
         if (event.target.closest("button")) {
             return;
         }
@@ -575,7 +584,7 @@ function bindOrientationGizmoControls(orientationGizmo, renderer) {
     });
 
     orientationGizmo.scene.addEventListener("pointermove", (event) => {
-        if (!dragging) {
+        if (!running || !dragging) {
             return;
         }
 
@@ -597,9 +606,45 @@ function bindOrientationGizmoControls(orientationGizmo, renderer) {
         releaseOrientationPointer(orientationGizmo.scene, event.pointerId);
     });
 
-    syncOrientationGizmo();
+    return {
+        start,
+        stop,
+    };
+
+    function start() {
+        if (running) {
+            return;
+        }
+
+        running = true;
+        scheduleSync();
+    }
+
+    function stop() {
+        running = false;
+        dragging = false;
+
+        if (animationFrame !== null) {
+            cancelAnimationFrame(animationFrame);
+            animationFrame = null;
+        }
+    }
+
+    function scheduleSync() {
+        if (!running || animationFrame !== null) {
+            return;
+        }
+
+        animationFrame = requestAnimationFrame(syncOrientationGizmo);
+    }
 
     function syncOrientationGizmo() {
+        animationFrame = null;
+
+        if (!running) {
+            return;
+        }
+
         const orientation = renderer.getCameraOrientation?.();
         const values = orientation?.quaternion;
 
@@ -616,8 +661,15 @@ function bindOrientationGizmoControls(orientationGizmo, renderer) {
             orientationGizmo.root.dataset.projection = orientation.projection || "perspective";
         }
 
-        requestAnimationFrame(syncOrientationGizmo);
+        scheduleSync();
     }
+}
+
+function createNoopLifecycleController() {
+    return {
+        start() {},
+        stop() {},
+    };
 }
 
 function createOrientationAxisVectors() {

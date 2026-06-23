@@ -26,17 +26,36 @@ window.SolarSim.screens.initWelcomeScreen = function initWelcomeScreen({ root, r
         });
     });
 
-    window.addEventListener("solar-sim:navigate", (event) => {
-        root.dataset.pendingRoute = event.detail.screenName;
-    });
-
     if (canvas) {
         const backdrop = createOrbitBackdrop(canvas, store ? store.getState().graphics : null);
 
-        window.addEventListener("solar-sim:graphics-settings-applied", (event) => {
-            backdrop.applySettings(event.detail.graphics);
-        });
+        const handleNavigation = (event) => {
+            const screenName = event.detail?.screenName;
+            root.dataset.pendingRoute = screenName;
+
+            if (screenName === "welcome") {
+                backdrop.start();
+                return;
+            }
+
+            backdrop.stop();
+        };
+        const handleGraphicsSettings = (event) => {
+            backdrop.applySettings(event.detail?.graphics);
+        };
+
+        window.addEventListener("solar-sim:navigate", handleNavigation);
+        window.addEventListener("solar-sim:graphics-settings-applied", handleGraphicsSettings);
+        window.addEventListener("beforeunload", () => backdrop.dispose(), { once: true });
+
+        backdrop.start();
+
+        return;
     }
+
+    window.addEventListener("solar-sim:navigate", (event) => {
+        root.dataset.pendingRoute = event.detail?.screenName;
+    });
 };
 
 function quitApplication() {
@@ -57,6 +76,9 @@ function quitApplication() {
 
 function createOrbitBackdrop(canvas, initialGraphicsSettings) {
     const context = canvas.getContext("2d");
+    let animationFrame = null;
+    let running = false;
+    let disposed = false;
     const state = {
         frameIntervalMs: getFrameInterval(initialGraphicsSettings),
         lastFrameTime: 0,
@@ -71,7 +93,56 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
         orbitCount: 8,
     };
 
+    function start() {
+        if (disposed || running) {
+            return;
+        }
+
+        running = true;
+        state.lastFrameTime = 0;
+        resize();
+        window.addEventListener("resize", resize);
+        scheduleNextFrame();
+    }
+
+    function stop() {
+        if (!running) {
+            return;
+        }
+
+        running = false;
+        window.removeEventListener("resize", resize);
+
+        if (animationFrame !== null) {
+            cancelAnimationFrame(animationFrame);
+            animationFrame = null;
+        }
+    }
+
+    function dispose() {
+        if (disposed) {
+            return;
+        }
+
+        stop();
+        disposed = true;
+        state.particles = [];
+        state.blackHoleParticles = [];
+    }
+
+    function scheduleNextFrame() {
+        if (!running || animationFrame !== null) {
+            return;
+        }
+
+        animationFrame = requestAnimationFrame(draw);
+    }
+
     function resize() {
+        if (disposed) {
+            return;
+        }
+
         state.pixelRatio = getPixelRatioForQuality(state.renderQuality);
         state.width = window.innerWidth;
         state.height = window.innerHeight;
@@ -88,8 +159,14 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
     }
 
     function draw(time) {
+        animationFrame = null;
+
+        if (!running || disposed) {
+            return;
+        }
+
         if (time - state.lastFrameTime < state.frameIntervalMs) {
-            requestAnimationFrame(draw);
+            scheduleNextFrame();
             return;
         }
 
@@ -104,18 +181,20 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
         drawOrbits(context, centerX, centerY, state.width, elapsed, state);
         drawBlackHole(context, centerX, centerY, state.width, state.height, time * 0.001, state);
 
-        requestAnimationFrame(draw);
+        scheduleNextFrame();
     }
 
-    resize();
-    window.addEventListener("resize", resize);
-    requestAnimationFrame(draw);
-
     return {
+        start,
+        stop,
+        dispose,
         applySettings(graphicsSettings) {
             state.frameIntervalMs = getFrameInterval(graphicsSettings);
             state.renderQuality = getWelcomeBackdropQuality(graphicsSettings);
-            resize();
+
+            if (running) {
+                resize();
+            }
         },
     };
 }
