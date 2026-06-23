@@ -1,4 +1,48 @@
 const TWO_PI = Math.PI * 2;
+const WELCOME_RENDER_PROFILES = {
+    low: {
+        accretionBandCount: 7,
+        blackHoleParticleCount: 36,
+        highlightCount: 3,
+        maxFps: 30,
+        orbitCount: 5,
+        pixelRatioCap: 0.85,
+        rippleCount: 4,
+        staticStarMax: 320,
+        staticStarMin: 150,
+        staticStarSpacing: 5.2,
+        twinkleStarCount: 18,
+        glowScale: 0.55,
+    },
+    medium: {
+        accretionBandCount: 11,
+        blackHoleParticleCount: 58,
+        highlightCount: 5,
+        maxFps: 45,
+        orbitCount: 7,
+        pixelRatioCap: 1,
+        rippleCount: 6,
+        staticStarMax: 460,
+        staticStarMin: 210,
+        staticStarSpacing: 4.2,
+        twinkleStarCount: 30,
+        glowScale: 0.72,
+    },
+    full: {
+        accretionBandCount: 15,
+        blackHoleParticleCount: 82,
+        highlightCount: 6,
+        maxFps: 60,
+        orbitCount: 8,
+        pixelRatioCap: 1.25,
+        rippleCount: 7,
+        staticStarMax: 560,
+        staticStarMin: 260,
+        staticStarSpacing: 3.6,
+        twinkleStarCount: 42,
+        glowScale: 0.86,
+    },
+};
 
 window.SolarSim = window.SolarSim || {};
 window.SolarSim.screens = window.SolarSim.screens || {};
@@ -76,21 +120,23 @@ function quitApplication() {
 
 function createOrbitBackdrop(canvas, initialGraphicsSettings) {
     const context = canvas.getContext("2d");
+    const initialRenderQuality = getWelcomeBackdropQuality(initialGraphicsSettings);
     let animationFrame = null;
     let running = false;
     let disposed = false;
     const state = {
         frameIntervalMs: getFrameInterval(initialGraphicsSettings),
         lastFrameTime: 0,
-        renderQuality: getWelcomeBackdropQuality(initialGraphicsSettings),
+        renderQuality: initialRenderQuality,
+        profile: getWelcomeRenderProfile(initialRenderQuality),
         imageSmoothingEnabled: true,
         visualEffects: createWelcomeVisualEffectsDefaults(),
         width: 0,
         height: 0,
         pixelRatio: 1,
+        staticStarLayer: null,
         particles: [],
         blackHoleParticles: [],
-        orbitCount: 8,
     };
 
     function start() {
@@ -126,6 +172,7 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
 
         stop();
         disposed = true;
+        state.staticStarLayer = null;
         state.particles = [];
         state.blackHoleParticles = [];
     }
@@ -143,7 +190,8 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
             return;
         }
 
-        state.pixelRatio = getPixelRatioForQuality(state.renderQuality);
+        state.profile = getWelcomeRenderProfile(state.renderQuality);
+        state.pixelRatio = getPixelRatioForQuality(state.profile);
         state.width = window.innerWidth;
         state.height = window.innerHeight;
         canvas.width = Math.floor(state.width * state.pixelRatio);
@@ -153,9 +201,14 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
         context.setTransform(state.pixelRatio, 0, 0, state.pixelRatio, 0, 0);
         context.imageSmoothingEnabled = state.imageSmoothingEnabled;
 
-        state.particles = createParticles(state.width, state.height, state.renderQuality);
-        state.blackHoleParticles = createBlackHoleParticles(state.renderQuality);
-        state.orbitCount = getOrbitCountForQuality(state.renderQuality);
+        state.staticStarLayer = createStaticStarLayer(
+            state.width,
+            state.height,
+            state.pixelRatio,
+            state.profile,
+        );
+        state.particles = createParticles(state.width, state.height, state.profile);
+        state.blackHoleParticles = createBlackHoleParticles(state.profile);
     }
 
     function draw(time) {
@@ -189,8 +242,11 @@ function createOrbitBackdrop(canvas, initialGraphicsSettings) {
         stop,
         dispose,
         applySettings(graphicsSettings) {
+            const nextQuality = getWelcomeBackdropQuality(graphicsSettings);
+
+            state.renderQuality = nextQuality;
+            state.profile = getWelcomeRenderProfile(nextQuality);
             state.frameIntervalMs = getFrameInterval(graphicsSettings);
-            state.renderQuality = getWelcomeBackdropQuality(graphicsSettings);
 
             if (running) {
                 resize();
@@ -207,14 +263,60 @@ function createWelcomeVisualEffectsDefaults() {
     };
 }
 
-function createParticles(width, height, renderQuality) {
-    const qualityMultipliers = {
-        low: 0.58,
-        medium: 1,
-        full: 1.45,
-    };
-    const multiplier = qualityMultipliers[renderQuality] || qualityMultipliers.medium;
-    const count = Math.round(Math.min(Math.max(width / 3.6, 220), 620) * multiplier);
+function createStaticStarLayer(width, height, pixelRatio, profile) {
+    const layer = document.createElement("canvas");
+    const layerContext = layer.getContext("2d");
+
+    if (!layerContext) {
+        return null;
+    }
+
+    layer.width = Math.floor(width * pixelRatio);
+    layer.height = Math.floor(height * pixelRatio);
+    layerContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+    const count = Math.round(
+        Math.min(Math.max(width / profile.staticStarSpacing, profile.staticStarMin), profile.staticStarMax),
+    );
+
+    for (let index = 0; index < count; index += 1) {
+        drawStaticStar(layerContext, width, height, index, profile);
+    }
+
+    return layer;
+}
+
+function drawStaticStar(context, width, height, index, profile) {
+    const seed = index + 1;
+    const x = pseudoRandom(seed * 19) * width;
+    const y = pseudoRandom(seed * 37) * height;
+    const radius = 0.45 + pseudoRandom(seed * 53) * 1.15;
+    const alpha = 0.38 + pseudoRandom(seed * 71) * 0.52;
+    const isGlowStar = pseudoRandom(seed * 89) > 0.86;
+
+    if (isGlowStar) {
+        const glowRadius = radius * (5.2 + profile.glowScale * 2.4);
+        const gradient = context.createRadialGradient(x, y, 0, x, y, glowRadius);
+
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+        gradient.addColorStop(0.22, `rgba(255, 255, 255, ${alpha * 0.36})`);
+        gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+
+        context.fillStyle = gradient;
+        context.beginPath();
+        context.arc(x, y, glowRadius, 0, TWO_PI);
+        context.fill();
+        return;
+    }
+
+    context.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    context.beginPath();
+    context.arc(x, y, radius, 0, TWO_PI);
+    context.fill();
+}
+
+function createParticles(width, height, profile) {
+    const count = profile.twinkleStarCount;
 
     return Array.from({ length: count }, (_, index) => {
         const seed = index + 1;
@@ -233,13 +335,8 @@ function createParticles(width, height, renderQuality) {
     });
 }
 
-function createBlackHoleParticles(renderQuality) {
-    const qualityCounts = {
-        low: 70,
-        medium: 120,
-        full: 190,
-    };
-    const count = qualityCounts[renderQuality] || qualityCounts.medium;
+function createBlackHoleParticles(profile) {
+    const count = profile.blackHoleParticleCount;
 
     return Array.from({ length: count }, (_, index) => {
         const seed = index + 1;
@@ -266,6 +363,10 @@ function clearBackdrop(context, state) {
 }
 
 function drawStars(context, particles, elapsed, state) {
+    if (state.staticStarLayer) {
+        context.drawImage(state.staticStarLayer, 0, 0, state.width, state.height);
+    }
+
     const pixelRatio = state.pixelRatio || 1;
     const driftCenterX = context.canvas.width / pixelRatio * 0.74;
     const driftCenterY = context.canvas.height / pixelRatio * 0.5;
@@ -285,7 +386,7 @@ function drawStars(context, particles, elapsed, state) {
         context.beginPath();
         context.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         context.shadowColor = "rgba(255, 255, 255, 0.72)";
-        context.shadowBlur = particle.radius * bloomScale;
+        context.shadowBlur = particle.radius * bloomScale * state.profile.glowScale;
         context.arc(x, y, particle.radius, 0, TWO_PI);
         context.fill();
         context.shadowBlur = 0;
@@ -293,7 +394,7 @@ function drawStars(context, particles, elapsed, state) {
 }
 
 function drawOrbits(context, centerX, centerY, width, elapsed, state) {
-    const orbitCount = state.orbitCount;
+    const orbitCount = state.profile.orbitCount;
     const baseRadius = Math.max(120, width * 0.11);
 
     for (let index = 0; index < orbitCount; index += 1) {
@@ -326,7 +427,7 @@ function drawBodyOnOrbit(context, centerX, centerY, radius, tilt, elapsed, index
 
     context.beginPath();
     context.shadowColor = "rgba(255, 255, 255, 0.82)";
-    context.shadowBlur = bodyRadius * (state.visualEffects.bloom ? 8 : 4);
+    context.shadowBlur = bodyRadius * (state.visualEffects.bloom ? 8 : 4) * state.profile.glowScale;
     context.fillStyle = index === 0 ? "#ffffff" : "rgba(255, 255, 255, 0.92)";
     context.arc(centerX + rotatedX, centerY + rotatedY, bodyRadius, 0, TWO_PI);
     context.fill();
@@ -344,7 +445,7 @@ function drawBlackHole(context, centerX, centerY, width, height, elapsed, state)
 }
 
 function drawBlackHoleHalo(context, centerX, centerY, radius, state) {
-    const haloRadius = radius * (state.visualEffects.bloom ? 5.2 : 4.5);
+    const haloRadius = radius * (state.visualEffects.bloom ? 5.2 : 4.5) * (0.78 + state.profile.glowScale * 0.22);
     const gradient = context.createRadialGradient(
         centerX,
         centerY,
@@ -369,7 +470,7 @@ function drawBlackHoleHalo(context, centerX, centerY, radius, state) {
 }
 
 function drawAccretionDisk(context, centerX, centerY, radius, rotation, elapsed, state) {
-    const bandCount = state.renderQuality === "low" ? 12 : 20;
+    const bandCount = state.profile.accretionBandCount;
 
     context.save();
     context.translate(centerX, centerY);
@@ -390,7 +491,7 @@ function drawAccretionDisk(context, centerX, centerY, radius, rotation, elapsed,
         context.strokeStyle = `rgba(245, 248, 255, ${alpha})`;
         context.lineWidth = lineWidth;
         context.shadowColor = "rgba(255, 255, 255, 0.7)";
-        context.shadowBlur = radius * (state.visualEffects.bloom ? 0.18 : 0.09);
+        context.shadowBlur = radius * (state.visualEffects.bloom ? 0.18 : 0.09) * state.profile.glowScale;
         context.arc(0, 0, bandRadius, start, start + sweep);
         context.stroke();
 
@@ -407,7 +508,7 @@ function drawAccretionDisk(context, centerX, centerY, radius, rotation, elapsed,
 }
 
 function drawAccretionHighlights(context, radius, elapsed, state) {
-    const highlightCount = state.renderQuality === "low" ? 4 : 7;
+    const highlightCount = state.profile.highlightCount;
 
     for (let index = 0; index < highlightCount; index += 1) {
         const lane = index / Math.max(1, highlightCount - 1);
@@ -419,7 +520,7 @@ function drawAccretionHighlights(context, radius, elapsed, state) {
         context.strokeStyle = `rgba(255, 255, 255, ${0.11 + (1 - lane) * 0.09})`;
         context.lineWidth = Math.max(1, radius * (0.012 + (1 - lane) * 0.018));
         context.shadowColor = "rgba(255, 255, 255, 0.88)";
-        context.shadowBlur = radius * (state.visualEffects.bloom ? 0.42 : 0.24);
+        context.shadowBlur = radius * (state.visualEffects.bloom ? 0.42 : 0.24) * state.profile.glowScale;
         context.arc(0, 0, bandRadius, start, start + sweep);
         context.stroke();
     }
@@ -443,7 +544,7 @@ function drawAccretionParticles(context, centerX, centerY, radius, rotation, ela
         context.beginPath();
         context.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         context.shadowColor = "rgba(255, 255, 255, 0.75)";
-        context.shadowBlur = particleRadius * (state.visualEffects.bloom ? 8 : 4.5);
+        context.shadowBlur = particleRadius * (state.visualEffects.bloom ? 8 : 4.5) * state.profile.glowScale;
         context.arc(centerX + rotatedX, centerY + rotatedY, particleRadius, 0, TWO_PI);
         context.fill();
     });
@@ -508,7 +609,7 @@ function drawEventHorizonRim(context, centerX, centerY, radius, elapsed, state) 
     context.save();
     context.lineCap = "round";
     context.shadowColor = "rgba(255, 255, 255, 0.84)";
-    context.shadowBlur = radius * (state.visualEffects.bloom ? 0.72 : 0.44);
+    context.shadowBlur = radius * (state.visualEffects.bloom ? 0.72 : 0.44) * state.profile.glowScale;
     context.strokeStyle = rimGradient;
     context.lineWidth = Math.max(3.5, radius * 0.064);
     context.beginPath();
@@ -586,7 +687,7 @@ function drawEventHorizonSurfaceContrast(context, centerX, centerY, radius, elap
 
 function drawEventHorizonRipples(context, centerX, centerY, radius, elapsed, state) {
     const horizonRadius = radius * 0.76;
-    const rippleCount = state.renderQuality === "low" ? 5 : 8;
+    const rippleCount = state.profile.rippleCount;
 
     context.save();
     context.beginPath();
@@ -660,40 +761,28 @@ function clampNumber(value, min, max) {
 
 function getFrameInterval(graphicsSettings) {
     const fpsLimit = graphicsSettings?.fpsLimit || "60";
+    const profile = getWelcomeRenderProfile(getWelcomeBackdropQuality(graphicsSettings));
+    const requestedFps = fpsLimit === "unlimited"
+        ? profile.maxFps
+        : Number(fpsLimit);
 
-    if (fpsLimit === "unlimited") {
-        return 0;
+    if (!Number.isFinite(requestedFps) || requestedFps <= 0) {
+        return 1000 / profile.maxFps;
     }
 
-    return 1000 / Number(fpsLimit);
+    return 1000 / Math.min(requestedFps, profile.maxFps);
 }
 
-function getPixelRatioForQuality(renderQuality) {
-    if (renderQuality === "low") {
-        return 1;
-    }
-
-    if (renderQuality === "full") {
-        return Math.min(window.devicePixelRatio || 1, 2.5);
-    }
-
-    return Math.min(window.devicePixelRatio || 1, 2);
-}
-
-function getOrbitCountForQuality(renderQuality) {
-    if (renderQuality === "low") {
-        return 5;
-    }
-
-    if (renderQuality === "full") {
-        return 10;
-    }
-
-    return 8;
+function getPixelRatioForQuality(profile) {
+    return Math.min(window.devicePixelRatio || 1, profile.pixelRatioCap);
 }
 
 function getWelcomeBackdropQuality(graphicsSettings) {
     return graphicsSettings?.skyboxQuality
         || (graphicsSettings?.renderQuality === "high" ? "full" : graphicsSettings?.renderQuality)
         || "full";
+}
+
+function getWelcomeRenderProfile(renderQuality) {
+    return WELCOME_RENDER_PROFILES[renderQuality] || WELCOME_RENDER_PROFILES.full;
 }

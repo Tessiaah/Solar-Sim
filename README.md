@@ -122,6 +122,19 @@ CSS is under `frontend/css`.
 
 The simulation screen uses Three.js loaded directly from a CDN in `frontend/index.html`.
 
+### Frontend Screen Lifecycles
+
+Screen changes are routed through `frontend/js/ui/screen-router.js`, which dispatches the `solar-sim:navigate` event after changing the active screen.
+
+Visual systems that run their own animation loop must follow the active screen lifecycle:
+
+- The welcome black-hole/backdrop canvas in `frontend/js/screens/welcome.js` exposes `start()`, `stop()`, and `dispose()`. It starts only while the welcome screen is active, stops when navigating away, and disposes on page unload.
+- The welcome animation has its own lightweight render profiles. It caps home-screen frame rate and canvas pixel ratio by skybox quality, caches the static star field into an offscreen canvas on resize, and keeps only a smaller twinkle/black-hole particle layer animated per frame.
+- The simulation orientation gizmo in `frontend/js/screens/simulation.js` exposes the same start/stop lifecycle. It runs only while the simulation screen is active and ignores pointer input while inactive.
+- The Three.js simulation renderer keeps its own run-token guarded animation loop in `frontend/js/rendering/simulation-renderer.js`; auxiliary screen widgets should not create independent always-on loops that survive navigation.
+
+This matters for performance because hidden canvas or UI animation loops can keep using GPU/CPU time while the simulation renderer is also running.
+
 ## Backend API Shape
 
 The PyWebView API is exposed through `AppApi`.
@@ -306,6 +319,7 @@ Current rendering behavior:
 - Recreates meshes when scenario metadata changes.
 - Uses a run-token guarded animation loop so stale async backend calls cannot restart rendering after the simulation screen has stopped.
 - Keeps rendering every animation frame while backend step requests run asynchronously, so camera movement and UI rendering stay responsive when paused or waiting on Python.
+- Emits renderer and simulation metrics at throttled intervals instead of every rendered frame, so diagnostics UI updates do not compete heavily with scene rendering.
 - Exposes a small screen-facing API for selection, labels, camera focus, tracking, playback state, speed, stepping, and scenario reset.
 - Exposes `destroy()` for renderer teardown.
 
@@ -426,6 +440,7 @@ Currently implemented runtime settings:
 - Resolution presets include `1280x720`, `1920x1080`, and `2560x1440`.
 - FPS limit throttles the renderer frame loop.
 - Skybox detail controls how much Three.js backdrop content is created.
+- Skybox detail also controls the welcome-screen animation profile. The welcome screen is intentionally capped separately from the simulation renderer: low runs up to `30 FPS`, medium up to `45 FPS`, and full up to `60 FPS`, with reduced canvas pixel-ratio caps to keep the home screen usable on weaker iGPUs.
 - Sphere rendering controls planet material mode, sphere geometry detail, and renderer pixel ratio.
 - Lighting controls the simulation scene's primary point light, ambient fill, and rim light intensities.
 - Body trails are off by default and can be enabled through the debug UI toggles. The simulation trail system setting controls only the renderer-owned retention length.
@@ -434,6 +449,7 @@ Currently implemented runtime settings:
 - The diagnostics drawer is always available on the simulation screen and shows all diagnostics rows/graphs when expanded.
 - Energy diagnostics display total energy plus relative energy drift, computed as `(E_current - E_initial) / abs(E_initial)`. This is the preferred graph for checking whether the integrator is conserving energy.
 - Performance, energy, momentum, trail, vector, and barycenter debug toggles also drive the compact debug overlay.
+- Diagnostics values are written to the DOM only when their displayed value changes, and graph canvases are skipped while hidden or collapsed.
 
 Python snapshots now include read-only diagnostics for acceleration, kinetic/potential/total energy, total momentum, and barycenter. The frontend only displays this data; it does not compute or mutate physics forces.
 
@@ -454,6 +470,7 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 
 ## Development Notes
 
+- Read this `README.md` before making project changes. Update it after fixes that change architecture, runtime behavior, controls, settings, or debugging expectations.
 - The frontend is plain scripts loaded by `index.html`; script order matters.
 - New renderer helper files should avoid leaking globals. Existing new renderer modules use `window.SolarSim.rendering` for public exports.
 - Avoid placing simulation logic in `HostWindowApi`.
@@ -462,6 +479,7 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 - Avoid hardcoding planet catalogs in frontend screens. Use `list_scenario_bodies()` and stable body ids.
 - Keep camera behavior in frontend rendering code. Camera movement must not request or mutate backend physics state.
 - New Three.js object systems should provide a disposal path before they are attached to renderer lifecycle.
+- New screen-level animations should expose explicit start/stop lifecycle methods and should be tied to `solar-sim:navigate` instead of running for the lifetime of the page.
 - New visual systems should use the renderer's scene-position conversion helper rather than repeating meter-to-scene scaling and axis conversion.
 - Interactive body-position tools should follow the transform-gizmo pattern: preview in the renderer while dragging, then commit through the backend with validated SI values.
 - Orbit guide lines should use static orbit metadata from Python. Do not derive guide-line radius or shape from changing runtime snapshots.
