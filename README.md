@@ -109,6 +109,7 @@ Main frontend areas:
 - `frontend/js/screens/welcome.js`: welcome screen behavior.
 - `frontend/js/screens/scenarios.js`: scenario list and custom scenario creation screen.
 - `frontend/js/screens/settings.js`: settings UI.
+- `frontend/js/screens/about.js`: static controls guide screen for simulation controls, keybinds, and camera modes.
 - `frontend/js/screens/simulation.js`: simulation screen startup/stop behavior and DOM bindings for playback, selected-body inspection drawer, body facts, sandbox body tuning, quick settings, and time controls.
 - `frontend/js/api/backend-api.js`: small JavaScript adapter around PyWebView API calls.
 - `frontend/js/utils/display-format.js`: shared frontend formatting and translation helpers for body names, scenario names, units, durations, facts, and vectors.
@@ -396,10 +397,24 @@ Current behavior:
 - Lets the user choose whether the custom system includes the Sun as the central body.
 - Calls `create_custom_scenario({ name, bodyIds, includeSun })`; Python validates the stable body ids, creates and persists a scenario recipe, builds an in-memory scenario factory, loads that scenario, and returns the initial snapshot/metadata.
 - Lets the user delete persisted custom scenarios. Built-in scenarios are not deletable.
+- Keeps the available scenario list inside its own scrollable panel once enough scenarios exist, so the whole scenarios page does not become the primary scroll area.
 - Dispatches `solar-sim:launch-scenario` with the requested scenario id before routing to the simulation screen.
 - The simulation screen consumes that event and calls `renderer.loadScenario(scenarioId)`, so the existing renderer lifecycle handles metadata replacement, mesh disposal/recreation, snapshot loading, and playback restart.
 
 The scenario screen does not construct body definitions, positions, velocities, masses, radii, textures, rings, facts, or orbit metadata. Those remain in Python scenario factories.
+
+### About Screen
+
+The main menu `About` button opens `frontend/js/screens/about.js`.
+
+Current behavior:
+
+- Presents a production-facing controls guide for the simulation viewport.
+- Documents playback controls, speed buttons, reset behavior, selected-body tools, visual toggles, WASD navigation, Blender-style navigation, orientation gizmo behavior, diagnostics, and the `Esc` Settings flow.
+- Uses static HTML with `data-i18n` keys from `frontend/js/i18n/translations.js`; visible About copy should not be hardcoded in JavaScript.
+- Keeps control descriptions written from the user's point of view. Avoid implementation terms such as backend APIs, metadata, render frames, or integration steps in visible About text.
+- Reuses the shared page background/header styling from the Settings screen and keeps About-specific layout in `frontend/css/components/about.css`. About cards, keycaps, and mode tiles should stay on flat Settings-style dark surfaces instead of decorative gradients.
+- Does not start animation loops, load scenarios, call the backend, or mutate renderer/physics state.
 
 ### Camera Controls
 
@@ -486,6 +501,7 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 - Keep playback controls separate from graphics quality. Skybox, sphere, and lighting settings are visual-only; simulation speed belongs to the simulation control bar and should not be hidden inside graphics presets.
 - Avoid generic top-level helper names in frontend scripts. The app uses classic script tags, so shared names can collide across files.
 - Keep translatable UI copy in `frontend/js/i18n/translations.js`; body/scenario factories may choose fact keys, but they should not duplicate translated prose.
+- User-facing descriptors should explain what the user can see or do, not how the code is implemented. Reserve implementation terms for README/developer documentation and diagnostics where the technical label is intentional.
 
 
 ## Main Source Files
@@ -504,6 +520,7 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 - `frontend/js/api/backend-api.js`: JavaScript backend API wrapper.
 - `frontend/js/screens/scenarios.js`: scenario builder/list.
 - `frontend/js/screens/settings.js`: settings screen.
+- `frontend/js/screens/about.js`: controls guide screen.
 - `frontend/js/screens/simulation.js`: simulation screen UI bindings.
 - `frontend/js/settings/settings-schema.js`: runtime settings schema.
 - `frontend/js/settings/settings-store.js`: in-memory settings store.
@@ -515,6 +532,7 @@ Do not hardcode new visible UI text directly in renderer or screen logic. Add a 
 - `frontend/js/rendering/fly-camera.js`: WASD camera mode.
 - `frontend/js/rendering/viewport-camera.js`: camera mode controller and Blender-style orbit mode.
 - `frontend/js/rendering/transform-gizmo.js`: selected-body move gizmo.
+- `frontend/css/components/about.css`: About screen layout and control-reference styling.
 
 ## JavaScript Checks
 
@@ -541,6 +559,7 @@ $files = @(
   "frontend\js\screens\welcome.js",
   "frontend\js\screens\scenarios.js",
   "frontend\js\screens\settings.js",
+  "frontend\js\screens\about.js",
   "frontend\js\screens\simulation.js",
   "frontend\js\app.js"
 )

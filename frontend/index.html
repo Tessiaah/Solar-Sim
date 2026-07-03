@@ -12,6 +12,7 @@
         <link rel="stylesheet" href="./css/components/welcome.css">
         <link rel="stylesheet" href="./css/components/scenarios.css">
         <link rel="stylesheet" href="./css/components/settings.css">
+        <link rel="stylesheet" href="./css/components/about.css">
         <link rel="stylesheet" href="./css/components/simulation.css">
         <script defer src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
         <script defer src="./js/api/backend-api.js"></script>
@@ -31,6 +32,7 @@
         <script defer src="./js/screens/welcome.js"></script>
         <script defer src="./js/screens/scenarios.js"></script>
         <script defer src="./js/screens/settings.js"></script>
+        <script defer src="./js/screens/about.js"></script>
         <script defer src="./js/screens/simulation.js"></script>
         <script defer src="./js/app.js"></script>
     </head>
@@ -318,6 +320,198 @@
                 <section class="settings-shell" aria-label="Application settings" data-i18n-aria-label="settings.shell">
                     <nav id="settings-category-nav" class="settings-category-nav" aria-label="Settings categories" data-i18n-aria-label="settings.categories"></nav>
                     <form id="settings-form" class="settings-form"></form>
+                </section>
+            </main>
+
+            <main id="about-screen" class="screen about-screen" data-screen="about">
+                <header class="about-header">
+                    <div>
+                        <p class="about-kicker" data-i18n="about.kicker">Simulation guide</p>
+                        <h1 data-i18n="about.title">Controls</h1>
+                    </div>
+                    <button class="about-back-button" type="button" data-route="welcome">
+                        <span class="app-icon app-icon-arrow-left" aria-hidden="true"></span>
+                        <span data-i18n="common.back">Back</span>
+                    </button>
+                </header>
+
+                <section class="about-shell" aria-label="Simulation controls guide" data-i18n-aria-label="about.shell">
+                    <section class="about-intro-panel">
+                        <div>
+                            <p class="about-section-kicker" data-i18n="about.intro.kicker">Viewport reference</p>
+                            <h2 data-i18n="about.intro.title">Two camera modes, one simulation workspace.</h2>
+                            <p data-i18n="about.intro.copy">
+                                Choose WASD or Blender navigation in Settings, then use the same simulation controls, inspection tools, and visual toggles from the viewport.
+                            </p>
+                        </div>
+                        <div class="about-mode-pair" aria-label="Camera modes" data-i18n-aria-label="about.cameraModes">
+                            <span>WASD</span>
+                            <span>Blender</span>
+                        </div>
+                    </section>
+
+                    <section class="about-guide-grid">
+                        <article class="about-card">
+                            <div class="about-card-heading">
+                                <span class="about-card-icon about-card-icon-play" aria-hidden="true"></span>
+                                <h2 data-i18n="about.simulation.title">Simulation</h2>
+                            </div>
+                            <ul class="about-shortcut-list">
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.pause">Pause</kbd><kbd data-i18n="simulation.resume">Resume</kbd></span>
+                                    <span data-i18n="about.simulation.playback">Pause or continue the motion of the system.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.step">Step</kbd></span>
+                                    <span data-i18n="about.simulation.step">Move the simulation forward once while paused.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd>1x</kbd><kbd>4x</kbd><kbd>16x</kbd><kbd>64x</kbd></span>
+                                    <span data-i18n="about.simulation.speed">Change how quickly simulated time advances.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.reset">Reset</kbd></span>
+                                    <span data-i18n="about.simulation.reset">Reload the current scenario from its clean starting state.</span>
+                                </li>
+                            </ul>
+                        </article>
+
+                        <article class="about-card">
+                            <div class="about-card-heading">
+                                <span class="about-card-icon about-card-icon-body" aria-hidden="true"></span>
+                                <h2 data-i18n="about.body.title">Body Tools</h2>
+                            </div>
+                            <ul class="about-shortcut-list">
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.body">Body</kbd></span>
+                                    <span data-i18n="about.body.select">Select a body for stats, highlighting, tracking, facts, and sandbox editing.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.facts">Facts</kbd><kbd data-i18n="simulation.sandbox">Sandbox</kbd></span>
+                                    <span data-i18n="about.body.panels">Open factual information or controlled physical-value editing for the selected body.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.transformGizmo">Move body</kbd></span>
+                                    <span data-i18n="about.body.gizmo">Show axis and plane handles for moving the selected body in space.</span>
+                                </li>
+                            </ul>
+                        </article>
+
+                        <article class="about-card">
+                            <div class="about-card-heading">
+                                <span class="about-card-icon about-card-icon-visual" aria-hidden="true"></span>
+                                <h2 data-i18n="about.visual.title">Visual Toggles</h2>
+                            </div>
+                            <ul class="about-shortcut-list">
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.labels">Labels</kbd></span>
+                                    <span data-i18n="about.visual.labels">Show or hide translated body labels in the scene.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.orbits">Orbits</kbd></span>
+                                    <span data-i18n="about.visual.orbits">Show the expected orbit paths around the system.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.track">Track</kbd><kbd>F</kbd></span>
+                                    <span data-i18n="about.visual.track">Keep the camera looking at the selected body, or toggle tracking with F.</span>
+                                </li>
+                            </ul>
+                        </article>
+
+                        <article class="about-card about-card-wide">
+                            <div class="about-card-heading">
+                                <span class="about-card-icon about-card-icon-wasd" aria-hidden="true"></span>
+                                <h2 data-i18n="about.wasd.title">WASD Mode</h2>
+                            </div>
+                            <p class="about-card-copy" data-i18n="about.wasd.copy">
+                                WASD mode behaves like a free camera for flying through the scene.
+                            </p>
+                            <ul class="about-shortcut-list">
+                                <li>
+                                    <span class="about-keys"><kbd>RMB</kbd></span>
+                                    <span data-i18n="about.wasd.look">Hold the right mouse button and move the mouse to look around.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+                                    <span data-i18n="about.wasd.move">Move forward, left, backward, and right.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd>Space</kbd><kbd>E</kbd><kbd>Ctrl</kbd><kbd>Q</kbd></span>
+                                    <span data-i18n="about.wasd.vertical">Move up with Space or E, and down with Ctrl or Q.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd>Shift</kbd><kbd data-i18n="about.key.mouseWheel">Wheel</kbd></span>
+                                    <span data-i18n="about.wasd.speedZoom">Hold Shift for faster movement, or use the mouse wheel to move along the view direction.</span>
+                                </li>
+                            </ul>
+                        </article>
+
+                        <article class="about-card about-card-wide">
+                            <div class="about-card-heading">
+                                <span class="about-card-icon about-card-icon-blender" aria-hidden="true"></span>
+                                <h2 data-i18n="about.blender.title">Blender Mode</h2>
+                            </div>
+                            <p class="about-card-copy" data-i18n="about.blender.copy">
+                                Blender mode orbits around a target point and is best for inspecting bodies from stable viewpoints.
+                            </p>
+                            <ul class="about-shortcut-list">
+                                <li>
+                                    <span class="about-keys"><kbd>MMB</kbd></span>
+                                    <span data-i18n="about.blender.orbit">Drag the middle mouse button to orbit around the current target point.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd>Shift</kbd><span class="about-key-plus">+</span><kbd>MMB</kbd></span>
+                                    <span data-i18n="about.blender.pan">Hold Shift while dragging the middle mouse button to pan the view.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="about.key.mouseWheel">Wheel</kbd></span>
+                                    <span data-i18n="about.blender.zoom">Zoom toward or away from the orbit target.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd>F</kbd></span>
+                                    <span data-i18n="about.blender.track">Keep the selected body in view while you navigate.</span>
+                                </li>
+                            </ul>
+                        </article>
+
+                        <article class="about-card">
+                            <div class="about-card-heading">
+                                <span class="about-card-icon about-card-icon-view" aria-hidden="true"></span>
+                                <h2 data-i18n="about.view.title">View Helpers</h2>
+                            </div>
+                            <ul class="about-shortcut-list">
+                                <li>
+                                    <span class="about-keys"><kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd></span>
+                                    <span data-i18n="about.view.axes">Use the orientation gizmo axes for right, front, and top-style views.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="simulation.camera">Camera</kbd></span>
+                                    <span data-i18n="about.view.cameraMenu">Adjust movement speed and mouse sensitivity from the viewport camera menu.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd>Esc</kbd></span>
+                                    <span data-i18n="about.view.settings">Open Settings from the simulation screen, then press Esc again or Back to return.</span>
+                                </li>
+                            </ul>
+                        </article>
+
+                        <article class="about-card">
+                            <div class="about-card-heading">
+                                <span class="about-card-icon about-card-icon-diagnostics" aria-hidden="true"></span>
+                                <h2 data-i18n="about.diagnostics.title">Diagnostics</h2>
+                            </div>
+                            <ul class="about-shortcut-list">
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="overlay.performance">Diagnostics</kbd></span>
+                                    <span data-i18n="about.diagnostics.drawer">Open the drawer for performance, stability, and camera values.</span>
+                                </li>
+                                <li>
+                                    <span class="about-keys"><kbd data-i18n="overlay.debug">Debug</kbd></span>
+                                    <span data-i18n="about.diagnostics.overlay">Enable compact overlay rows from Settings when you need live counters or graphs.</span>
+                                </li>
+                            </ul>
+                        </article>
+                    </section>
                 </section>
             </main>
 

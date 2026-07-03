@@ -90,6 +90,7 @@
     display: grid;
     grid-template-columns: minmax(230px, 0.8fr) minmax(420px, 1.7fr) minmax(250px, 0.9fr);
     gap: 18px;
+    align-items: start;
     width: min(1500px, 100%);
     margin: 0 auto;
 }
@@ -109,7 +110,13 @@
     display: grid;
     align-content: start;
     gap: 12px;
+    min-height: 0;
     padding: 16px;
+}
+
+.scenario-list-panel {
+    max-height: min(620px, calc(100vh - 184px));
+    overflow: hidden;
 }
 
 .scenario-builder-panel {
@@ -129,6 +136,26 @@
 .scenario-list {
     display: grid;
     gap: 8px;
+    max-height: min(520px, calc(100vh - 264px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-color: var(--color-line-strong) rgb(7 9 13 / 80%);
+    scrollbar-width: thin;
+}
+
+.scenario-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scenario-list::-webkit-scrollbar-track {
+    background: rgb(7 9 13 / 54%);
+}
+
+.scenario-list::-webkit-scrollbar-thumb {
+    border: 2px solid rgb(7 9 13 / 54%);
+    border-radius: 999px;
+    background: var(--color-line-strong);
 }
 
 .scenario-list-item {
@@ -471,6 +498,14 @@
 @media (max-width: 1180px) {
     .scenarios-shell {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .scenario-list-panel {
+        max-height: min(460px, calc(100vh - 176px));
+    }
+
+    .scenario-list {
+        max-height: min(360px, calc(100vh - 256px));
     }
 
     .scenario-body-grid {

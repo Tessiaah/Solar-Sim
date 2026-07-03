@@ -1,4 +1,5 @@
-.settings-screen {
+.settings-screen,
+.about-screen {
     height: 100vh;
     min-height: 0;
     overflow-x: hidden;
@@ -13,21 +14,25 @@
         var(--color-bg);
 }
 
-.settings-screen::-webkit-scrollbar {
+.settings-screen::-webkit-scrollbar,
+.about-screen::-webkit-scrollbar {
     width: 10px;
 }
 
-.settings-screen::-webkit-scrollbar-track {
+.settings-screen::-webkit-scrollbar-track,
+.about-screen::-webkit-scrollbar-track {
     background: rgb(7 9 13 / 80%);
 }
 
-.settings-screen::-webkit-scrollbar-thumb {
+.settings-screen::-webkit-scrollbar-thumb,
+.about-screen::-webkit-scrollbar-thumb {
     border: 2px solid rgb(7 9 13 / 80%);
     border-radius: 999px;
     background: var(--color-line-strong);
 }
 
-.settings-screen::before {
+.settings-screen::before,
+.about-screen::before {
     position: absolute;
     inset: 0;
     z-index: -1;
@@ -39,7 +44,8 @@
     mask-image: linear-gradient(180deg, rgb(0 0 0 / 70%), transparent 86%);
 }
 
-.settings-header {
+.settings-header,
+.about-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -48,7 +54,8 @@
     width: min(1500px, 100%);
 }
 
-.settings-kicker {
+.settings-kicker,
+.about-kicker {
     margin: 0 0 8px;
     color: var(--color-accent);
     font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
@@ -58,7 +65,8 @@
     text-transform: uppercase;
 }
 
-.settings-header h1 {
+.settings-header h1,
+.about-header h1 {
     margin: 0;
     font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
     font-size: clamp(2.8rem, 5vw, 5.2rem);
@@ -67,7 +75,8 @@
     letter-spacing: 0;
 }
 
-.settings-back-button {
+.settings-back-button,
+.about-back-button {
     display: inline-flex;
     align-items: center;
     gap: 10px;
@@ -82,7 +91,8 @@
     font-weight: 900;
 }
 
-.settings-back-button .app-icon {
+.settings-back-button .app-icon,
+.about-back-button .app-icon {
     color: var(--color-accent);
 }
 
@@ -371,6 +381,7 @@
 
 @media (max-width: 980px) {
     .settings-header,
+    .about-header,
     .settings-shell {
         width: 100%;
     }
@@ -389,11 +400,13 @@
 }
 
 @media (max-width: 560px) {
-    .settings-screen {
+    .settings-screen,
+    .about-screen {
         padding: 22px 16px;
     }
 
-    .settings-header {
+    .settings-header,
+    .about-header {
         display: grid;
     }
 

@@ -23,8 +23,8 @@ window.SolarSim.settings.schema = {
     },
     graphics: {
         label: "Graphics",
-        summary: "Renderer, display, and frame pacing.",
-        description: "Tune the renderer, visual detail, and frame pacing.",
+        summary: "Visual detail, display, and frame smoothness.",
+        description: "Adjust image quality, display mode, and frame limit.",
         controls: [
             {
                 key: "resolution",
@@ -142,8 +142,8 @@ window.SolarSim.settings.schema = {
     },
     simulation: {
         label: "Simulation",
-        summary: "Backend-owned physics configuration.",
-        description: "Inspect backend simulation controls and visual simulation aids.",
+        summary: "Simulation behavior and visual helpers.",
+        description: "Review the simulation method and choose how long visual trails remain available.",
         controls: [
             {
                 key: "physicsIntegrator",
