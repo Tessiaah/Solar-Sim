@@ -164,6 +164,59 @@ Python validates the ids, converts them back to canonical planet names, creates 
 
 The factory closure is not written to JSON. It exists only in memory because functions cannot be safely or usefully serialized. The JSON stores the recipe, and the factory is rebuilt from that recipe when the app starts.
 
+Initial body positions are also decided in Python. Physical constants such as masses, radii, orbital distances, and orbital speeds live in `src/data/constants.py`. The scenario module chooses a fixed starting phase for each planet so the Solar System opens with bodies distributed around the Sun instead of stacked on one radial line.
+
+```python
+PLANET_INITIAL_PHASES_RAD = {
+    "Mercury": np.deg2rad(20.0),
+    "Venus": np.deg2rad(78.0),
+    "Earth": np.deg2rad(142.0),
+    "Mars": np.deg2rad(215.0),
+    "Jupiter": np.deg2rad(305.0),
+    "Saturn": np.deg2rad(35.0),
+    "Uranus": np.deg2rad(168.0),
+    "Neptune": np.deg2rad(260.0),
+}
+```
+
+Those phases are stable starting conditions, not live astronomical ephemerides. A planet starts on the `X/Y` physics plane:
+
+```python
+def circular_orbit_position(distance_m: float, phase_rad: float) -> np.ndarray:
+    return np.array([
+        distance_m * np.cos(phase_rad),
+        distance_m * np.sin(phase_rad),
+        0.0,
+    ], dtype=np.float64)
+```
+
+The initial velocity is perpendicular to the radius vector, giving the body a circular-orbit approximation:
+
+```python
+def circular_orbit_velocity(speed_ms: float, phase_rad: float) -> np.ndarray:
+    return np.array([
+        -speed_ms * np.sin(phase_rad),
+        speed_ms * np.cos(phase_rad),
+        0.0,
+    ], dtype=np.float64)
+```
+
+`create_solar_system()` uses all configured phases. Custom scenarios use only the selected planets, but keep each selected planet's configured phase. The simple Sun-Earth scenario is a special case because `create_planet("Earth")` uses the default phase `0.0`, which places Earth at `[EARTH_DISTANCE_FROM_SUN_M, 0, 0]`.
+
+In scenarios with the Sun, the Sun is not fixed. It starts at the origin and receives a small momentum-balancing velocity calculated from the selected planets:
+
+```python
+def calculate_momentum_balancing_sun_velocity(planets: list[SimBody]) -> np.ndarray:
+    planet_momentum = np.zeros(3, dtype=np.float64)
+
+    for planet in planets:
+        planet_momentum += planet.definition.mass_kg * planet.state.velocity_ms
+
+    return -planet_momentum / SUN_MASS_KG
+```
+
+For sunless scenarios, Python does not hide the Sun. It removes solar parent/orbit metadata from the selected planets and recenters the selected bodies in their own barycentric frame. That keeps the system physically distinct from a normal Solar System with the Sun merely invisible.
+
 ## 6. Backend API
 
 The PyWebView API surface is exposed by `AppApi` in `src/app/api.py`.
@@ -188,6 +241,37 @@ Simulation methods:
 
 The frontend calls these methods through `frontend/js/api/backend-api.js`. That file is intentionally small. It wraps `window.pywebview.api`, calls methods by name, and always returns a Promise-like result to the frontend.
 
+The wrapper centralizes the JavaScript-to-Python boundary:
+
+```js
+function call(methodName, ...args) {
+    const api = window.pywebview?.api || null;
+    const method = api?.[methodName];
+
+    if (typeof method !== "function") {
+        return Promise.resolve(null);
+    }
+
+    return Promise.resolve(method(...args));
+}
+```
+
+The simulation namespace then maps frontend-friendly method names to Python/PyWebView names:
+
+```js
+simulation: {
+    loadScenario(scenarioId) {
+        return call("load_scenario", scenarioId);
+    },
+    step(steps) {
+        return call("step_simulation", steps);
+    },
+    getSnapshot() {
+        return call("get_simulation_snapshot");
+    },
+}
+```
+
 From the frontend point of view, backend calls are asynchronous:
 
 ```js
@@ -197,6 +281,8 @@ window.SolarSim.backend.simulation.updateBodyParameters(bodyId, updates)
 ```
 
 From the Python side, the API methods are normal synchronous Python methods returning JSON-serializable dictionaries. PyWebView handles the boundary between JavaScript and Python.
+
+This creates a clear sync/async boundary. Python simulation methods such as `SimulationRuntime.step(...)` run synchronously and immediately return a dictionary. JavaScript treats the same operation as promise-based because it crosses the PyWebView bridge. Rendering operations such as `renderCurrentFrame(...)`, `syncBodyMeshes(...)`, `updateBodyPositions(...)`, `selectBody(...)`, and `setPaused(...)` remain synchronous frontend operations.
 
 ## 7. Static Metadata and Dynamic Snapshots
 
@@ -344,6 +430,10 @@ Screens use that event to start or stop work. The simulation renderer starts onl
 
 The simulation renderer owns the main Three.js frame loop in `frontend/js/rendering/simulation-renderer.js`.
 
+Opening the program does not start backend stepping. The app starts on the welcome screen, initializes the backend runtime, settings, router, screens, and translations, but physics stepping begins only after the user enters the simulation screen.
+
+The simulation screen listens for `solar-sim:navigate`. When the active screen becomes `simulation`, it stops any previous renderer loop, loads or resets the scenario, unpauses playback, and then starts the renderer. Returning from Settings to Simulation can resume the existing session, but entering from the main menu reloads the active/default scenario so elapsed time starts cleanly.
+
 The important functions are:
 
 - `start()`;
@@ -364,6 +454,34 @@ The call order is:
 5. `requestSimulationStep()` calls `step_simulation(steps)` asynchronously.
 6. When Python returns, `setLastSnapshot()` stores the new snapshot, updates the time readout target, emits diagnostics metrics, and notifies UI listeners.
 7. `renderCurrentFrame()` renders the latest available snapshot, updates camera controls, labels, backdrop animation, gizmos, and then calls `renderer.render(scene, camera)`.
+
+`renderer.start()` does not immediately call `step_simulation(...)`. It first asks Python for the current state:
+
+```js
+async function loadCurrentSnapshot(activeRunToken) {
+    await ensureScenarioMetadata(requestStateToken);
+    const snapshot = await window.SolarSim.backend.simulation.getSnapshot();
+
+    if (snapshot && isActiveRun(activeRunToken)) {
+        setLastSnapshot(snapshot);
+    }
+}
+```
+
+Every backend response that contains a snapshot enters the renderer through `setLastSnapshot(...)`:
+
+```js
+function setLastSnapshot(snapshot) {
+    lastSnapshot = snapshot;
+    currentScenarioId = snapshot.scenarioId || currentScenarioId;
+    updateReadoutTarget(snapshot.elapsedS, hasSnapshot);
+    hasSnapshot = true;
+    emitSimulationMetrics(snapshot);
+    notifySnapshot(snapshot);
+}
+```
+
+This function stores backend truth in `lastSnapshot` and notifies listeners, but it does not directly move every mesh. The actual visual application happens in `renderCurrentFrame(...)`, where the renderer reads the latest snapshot and updates scene objects.
 
 The backend does not push frames and does not know the target FPS. The browser owns the render timing through `requestAnimationFrame`, and the frontend decides when to request simulation steps.
 
@@ -450,6 +568,23 @@ For radii:
 This scaling is visual only. It does not change masses, positions, velocities, accelerations, orbital calculations, or diagnostics in Python.
 
 The transform gizmo uses the inverse conversion when committing a dragged scene position back to Python. The renderer previews the drag visually, then sends a real `positionM` vector to `update_body_parameters()`.
+
+The direction of conversion is:
+
+```text
+Python to frontend:
+    meters
+    -> scale.toScenePosition(...)
+    -> Three.js scene units
+
+frontend drag to Python:
+    Three.js scene units
+    -> scale.fromScenePosition(...)
+    -> meters
+    -> update_body_parameters(..., { positionM })
+```
+
+The backend always stores literal meters. A value like `[150, 0, 0]` means 150 meters, not one AU and not 150 render units.
 
 ## 13. Settings Architecture
 
@@ -885,10 +1020,12 @@ This is important because Three.js objects allocate GPU resources. Replacing a s
 1. User clicks Start Simulation.
 2. Router switches to the simulation screen.
 3. `simulation.js` receives `solar-sim:navigate`.
-4. The renderer resets or loads the requested scenario.
-5. Python returns scenario metadata and an initial snapshot.
-6. The renderer caches metadata, stores the snapshot, and starts the frame loop.
-7. Each frame renders the latest snapshot and may request new physics steps.
+4. The screen stops any previous renderer loop.
+5. The renderer resets or loads the requested scenario.
+6. Python returns scenario metadata and an initial snapshot.
+7. The renderer caches metadata and stores the snapshot.
+8. `renderer.start()` loads the current snapshot again if needed, starts the camera controller, and schedules the first browser frame.
+9. Each frame renders the latest snapshot and may request new physics steps.
 
 ### One Running Frame
 
