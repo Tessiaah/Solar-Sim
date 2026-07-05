@@ -41,7 +41,11 @@ window.SolarSim.format = (function createDisplayFormatModule() {
     function scenarioDescription(scenario) {
         const scenarioId = scenario?.id;
 
-        if (!scenarioId || scenario?.custom) {
+        if (scenario?.custom) {
+            return customScenarioDescription(scenario);
+        }
+
+        if (!scenarioId) {
             return scenario?.description || "";
         }
 
@@ -51,6 +55,23 @@ window.SolarSim.format = (function createDisplayFormatModule() {
         return translatedDescription === key
             ? scenario.description || ""
             : translatedDescription;
+    }
+
+    function customScenarioDescription(scenario) {
+        const bodyIds = Array.isArray(scenario?.selectedBodyIds)
+            ? scenario.selectedBodyIds
+            : [];
+        const planetNames = bodyIds
+            .map((bodyId) => bodyName({ id: bodyId, name: bodyId }))
+            .filter(Boolean)
+            .join(", ");
+        const planets = planetNames || text("scenarios.none", {}, "None");
+
+        return text(
+            "scenarios.includedPlanets",
+            { planets },
+            `Included Planets: ${planets}`,
+        );
     }
 
     function mass(valueKg) {

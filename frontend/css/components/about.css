@@ -57,22 +57,34 @@
     gap: 10px;
 }
 
-.about-mode-pair span {
+.about-mode-button {
     min-width: 112px;
+    min-height: 50px;
     padding: 14px 18px;
     border: 1px solid var(--color-line);
     border-radius: var(--radius-small);
     background: rgb(7 9 13 / 42%);
     color: var(--color-text);
+    cursor: pointer;
     font-family: Bahnschrift, "DIN Alternate", "Agency FB", sans-serif;
     font-size: 1.02rem;
     font-weight: 900;
     text-align: center;
 }
 
-.about-mode-pair span:last-child {
-    border-color: var(--color-line);
-    background: rgb(7 9 13 / 42%);
+.about-mode-button:hover,
+.about-mode-button:focus-visible {
+    border-color: rgb(110 231 216 / 42%);
+    background: rgb(110 231 216 / 10%);
+    color: var(--color-text);
+    outline: none;
+}
+
+.about-mode-button.is-selected,
+.about-mode-button[aria-pressed="true"] {
+    border-color: var(--color-accent);
+    background: rgb(110 231 216 / 14%);
+    color: var(--color-text);
 }
 
 .about-guide-grid {

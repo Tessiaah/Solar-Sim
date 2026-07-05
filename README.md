@@ -398,6 +398,7 @@ Current behavior:
 - Calls `create_custom_scenario({ name, bodyIds, includeSun })`; Python validates the stable body ids, creates and persists a scenario recipe, builds an in-memory scenario factory, loads that scenario, and returns the initial snapshot/metadata.
 - Lets the user delete persisted custom scenarios. Built-in scenarios are not deletable.
 - Keeps the available scenario list inside its own scrollable panel once enough scenarios exist, so the whole scenarios page does not become the primary scroll area.
+- Displays custom scenario descriptions from stable `selectedBodyIds` in the frontend, using translated body names and the localized `Included Planets` label instead of relying on a persisted prose description.
 - Dispatches `solar-sim:launch-scenario` with the requested scenario id before routing to the simulation screen.
 - The simulation screen consumes that event and calls `renderer.loadScenario(scenarioId)`, so the existing renderer lifecycle handles metadata replacement, mesh disposal/recreation, snapshot loading, and playback restart.
 
@@ -414,6 +415,7 @@ Current behavior:
 - Uses static HTML with `data-i18n` keys from `frontend/js/i18n/translations.js`; visible About copy should not be hardcoded in JavaScript.
 - Keeps control descriptions written from the user's point of view. Avoid implementation terms such as backend APIs, metadata, render frames, or integration steps in visible About text.
 - Reuses the shared page background/header styling from the Settings screen and keeps About-specific layout in `frontend/css/components/about.css`. About cards, keycaps, and mode tiles should stay on flat Settings-style dark surfaces instead of decorative gradients.
+- The WASD and Blender mode buttons write to the shared `camera.navigationMode` setting, so changing the mode from About stays synced with the Settings camera tab and active renderer behavior.
 - Does not start animation loops, load scenarios, call the backend, or mutate renderer/physics state.
 
 ### Camera Controls
