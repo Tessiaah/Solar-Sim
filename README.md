@@ -8,6 +8,8 @@ There is currently no frontend build step.
 
 The app starts from `main.py`, which calls `launch_app()` in `src/app/launcher.py`.
 
+For a presentation-oriented explanation of the full architecture, data flow, JSON persistence, frame loop, API, integrator, translations, settings, and UI/Three.js ownership model, see `ARCHITECTURE.md`.
+
 `src/app/launcher.py`:
 - Loads `frontend/index.html` into a PyWebView window.
 - Creates a `1920x1080` window with minimum size `1280x720`.
